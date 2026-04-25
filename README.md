@@ -21,16 +21,25 @@ On the Pi:
 
 ```bash
 sudo apt update
-sudo apt install -y python3-venv ffmpeg
+sudo apt install -y python3-venv ffmpeg swig liblgpio-dev
 
-git clone <this repo> /home/pi/bird-away
-cd /home/pi/bird-away
+git clone <this repo> /home/pi/git/bird-away
+cd /home/pi/git/bird-away
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 
 cp .env.example .env          # then edit: OPENROUTER_API_KEY, RTSP_URL
 cp config.yaml.example config.yaml   # then edit GPIO pin, durations, etc.
 ```
+
+`swig` and `liblgpio-dev` are needed so `pip` can build the `lgpio` wheel,
+which gpiozero uses as its GPIO backend on Raspberry Pi OS Bookworm/Trixie.
+Without it gpiozero falls back to an experimental native pin factory and
+prints `PinFactoryFallback` warnings on startup.
+
+The clone path above (`/home/pi/git/bird-away`) matches the paths baked into
+`systemd/bird-away.service`. If you install elsewhere, edit `WorkingDirectory`,
+`EnvironmentFile`, and `ExecStart` in that unit to match.
 
 ## Configure
 
@@ -53,6 +62,9 @@ cp config.yaml.example config.yaml   # then edit GPIO pin, durations, etc.
 - `detector_model` — OpenRouter model id; default `anthropic/claude-haiku-4.5`.
 - `detector_base_url` — OpenAI-compatible base URL; default
   `https://openrouter.ai/api/v1`. Override to point at a different provider.
+- `detector_prompt` — system prompt sent to the vision model. Use a YAML
+  literal block (`|`) to write it across multiple lines. See
+  [Tuning the prompt](#tuning-the-prompt) for what makes a good one.
 - `log_level` — `INFO` or `DEBUG`.
 
 ## Run by hand
@@ -87,13 +99,42 @@ paths in `bird-away.service` if your install location differs.
 
 ## Tuning
 
-- **False positives** (sprays when no birds): tighten the system prompt in
-  `src/detector.py`, or switch `detector_model` to a stronger vision model
-  (e.g. `anthropic/claude-sonnet-4.5`).
+- **False positives** (sprays when no birds): tighten `detector_prompt` in
+  `config.yaml` (see [Tuning the prompt](#tuning-the-prompt)), or switch
+  `detector_model` to a stronger vision model (e.g.
+  `anthropic/claude-sonnet-4.5`).
 - **Birds aren't fazed**: increase `spray_duration`, or check that the spray
   pattern actually covers where they land.
 - **Storage filling up**: `captures/` grows unbounded. Add a cron job or
   `tmpfiles.d` rule to prune files older than N days.
+
+### Tuning the prompt
+
+`detector_prompt` is the system message sent to the vision model on every
+frame that passes the motion gate. The model receives the prompt plus a single
+still image, and the parser in `src/detector.py` calls it a bird if the reply
+starts with `yes` (case-insensitive).
+
+A few rules of thumb:
+
+- **Be specific about what counts.** "A bird" is ambiguous — does a duck on
+  the deck count? Birds in flight? Reflections in the water? Most false
+  positives and false negatives come from leaving these unstated. The default
+  prompt explicitly covers "in, on, or near the pool (including birds in
+  flight directly above it)" for that reason.
+- **Keep it short.** Long prompts cost more per call and rarely improve
+  accuracy. If you find yourself writing a paragraph, switch to a stronger
+  `detector_model` instead.
+- **Pin the output format.** End with something like "Output only the single
+  word." Models occasionally drift to "Yes." or "Yes, I see…" — those still
+  match `startswith("yes")`, but rambling answers like "I'm not sure…" parse
+  as `no`.
+- **Iterate against saved frames.** Every detection writes a still to
+  `captures/`. Point `scripts/test_detector.py captures/<file>.jpg` at known
+  bird and non-bird frames to sanity-check a prompt change before restarting
+  the service.
+- **Restart after editing.** `config.yaml` is read once at startup —
+  `sudo systemctl restart bird-away` to pick up changes.
 
 ## Safety notes
 

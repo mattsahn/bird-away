@@ -21,6 +21,7 @@ def main() -> int:
     cfg = load_config()
     detector = Detector(
         cfg.openrouter_api_key,
+        system_prompt=cfg.detector_prompt,
         model=cfg.detector_model,
         base_url=cfg.detector_base_url,
     )

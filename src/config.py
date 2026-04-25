@@ -20,6 +20,7 @@ class Config:
     capture_dir: Path
     detector_model: str
     detector_base_url: str
+    detector_prompt: str
     motion_enabled: bool
     motion_threshold: float
     motion_downscale: int
@@ -35,6 +36,12 @@ DEFAULTS = {
     "capture_dir": "./captures",
     "detector_model": "anthropic/claude-haiku-4.5",
     "detector_base_url": "https://openrouter.ai/api/v1",
+    "detector_prompt": (
+        "You are a bird detector for a backyard pool. "
+        "Respond with exactly 'yes' if you see one or more birds in, on, or "
+        "near the pool (including birds in flight directly above it). "
+        "Respond with exactly 'no' otherwise. Output only the single word."
+    ),
     "motion_enabled": True,
     "motion_threshold": 5.0,
     "motion_downscale": 320,
@@ -71,6 +78,7 @@ def load_config(yaml_path: Path | str = "config.yaml") -> Config:
         capture_dir=Path(merged["capture_dir"]).expanduser().resolve(),
         detector_model=str(merged["detector_model"]),
         detector_base_url=str(merged["detector_base_url"]),
+        detector_prompt=str(merged["detector_prompt"]),
         motion_enabled=bool(merged["motion_enabled"]),
         motion_threshold=float(merged["motion_threshold"]),
         motion_downscale=int(merged["motion_downscale"]),

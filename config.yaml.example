@@ -15,6 +15,16 @@ capture_dir: ./captures
 detector_model: anthropic/claude-haiku-4.5
 detector_base_url: https://openrouter.ai/api/v1
 
+# System prompt sent to the vision model. The model receives this plus a single
+# image and is expected to reply with exactly "yes" or "no". Keep instructions
+# short and unambiguous — long prompts cost more per call and don't necessarily
+# improve accuracy. See the README "Tuning the prompt" section for guidance.
+detector_prompt: |
+  You are a bird detector for a backyard pool. Respond with exactly 'yes'
+  if you see one or more birds in, on, or near the pool (including birds
+  in flight directly above it). Respond with exactly 'no' otherwise.
+  Output only the single word.
+
 # Local frame-diff gate. The vision API is only called when the mean per-pixel
 # delta between consecutive frames (downscaled grayscale) is >= threshold.
 # Tune threshold up if wind/clouds/sun create false positives, down if small
