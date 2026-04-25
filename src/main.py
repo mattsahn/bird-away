@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from . import camera
 from .config import Config, load_config
 from .detector import Detector
+from .motion import MotionDetector
 from .sprinkler import Sprinkler
 
 
@@ -71,16 +72,29 @@ def main() -> int:
         model=cfg.detector_model,
         base_url=cfg.detector_base_url,
     )
+    motion = (
+        MotionDetector(threshold=cfg.motion_threshold, downscale=cfg.motion_downscale)
+        if cfg.motion_enabled
+        else None
+    )
 
     with Sprinkler(cfg.gpio_pin, active_high=cfg.relay_active_high) as sprinkler:
         while not stop.requested:
             iter_start = time.monotonic()
             try:
                 frame = camera.capture_frame(cfg.rtsp_url)
-                if detector.is_bird_present(frame):
-                    _handle_event(cfg, frame, sprinkler)
-                else:
-                    logger.debug("no_bird")
+                run_detector = True
+                if motion is not None:
+                    moved, score = motion.check(frame)
+                    run_detector = moved
+                    logger.debug(
+                        "motion" if moved else "no_motion", extra={"score": score}
+                    )
+                if run_detector:
+                    if detector.is_bird_present(frame):
+                        _handle_event(cfg, frame, sprinkler)
+                    else:
+                        logger.debug("no_bird")
             except Exception:
                 logger.exception("loop_iteration_failed")
 

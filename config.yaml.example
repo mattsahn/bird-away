@@ -15,4 +15,12 @@ capture_dir: ./captures
 detector_model: anthropic/claude-haiku-4.5
 detector_base_url: https://openrouter.ai/api/v1
 
+# Local frame-diff gate. The vision API is only called when the mean per-pixel
+# delta between consecutive frames (downscaled grayscale) is >= threshold.
+# Tune threshold up if wind/clouds/sun create false positives, down if small
+# birds get missed. 0-255 scale; 5 is a reasonable starting point.
+motion_enabled: true
+motion_threshold: 5.0
+motion_downscale: 320
+
 log_level: INFO

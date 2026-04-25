@@ -20,6 +20,9 @@ class Config:
     capture_dir: Path
     detector_model: str
     detector_base_url: str
+    motion_enabled: bool
+    motion_threshold: float
+    motion_downscale: int
     log_level: str
 
 
@@ -32,6 +35,9 @@ DEFAULTS = {
     "capture_dir": "./captures",
     "detector_model": "anthropic/claude-haiku-4.5",
     "detector_base_url": "https://openrouter.ai/api/v1",
+    "motion_enabled": True,
+    "motion_threshold": 5.0,
+    "motion_downscale": 320,
     "log_level": "INFO",
 }
 
@@ -65,5 +71,8 @@ def load_config(yaml_path: Path | str = "config.yaml") -> Config:
         capture_dir=Path(merged["capture_dir"]).expanduser().resolve(),
         detector_model=str(merged["detector_model"]),
         detector_base_url=str(merged["detector_base_url"]),
+        motion_enabled=bool(merged["motion_enabled"]),
+        motion_threshold=float(merged["motion_threshold"]),
+        motion_downscale=int(merged["motion_downscale"]),
         log_level=str(merged["log_level"]).upper(),
     )
