@@ -1,7 +1,15 @@
 from __future__ import annotations
 
+import re
 import subprocess
 from pathlib import Path
+
+
+_CREDS_RE = re.compile(r"(rtsps?://)[^/@\s]+@", re.IGNORECASE)
+
+
+def _redact(text: str) -> str:
+    return _CREDS_RE.sub(r"\1***:***@", text)
 
 
 class CameraError(RuntimeError):
@@ -26,11 +34,13 @@ def capture_frame(rtsp_url: str, timeout_s: int = 15) -> bytes:
             timeout=timeout_s,
             check=False,
         )
-    except subprocess.TimeoutExpired as e:
-        raise CameraError(f"ffmpeg timed out after {timeout_s}s capturing frame") from e
+    except subprocess.TimeoutExpired:
+        raise CameraError(
+            f"ffmpeg timed out after {timeout_s}s capturing frame"
+        ) from None
 
     if result.returncode != 0 or not result.stdout:
-        stderr = result.stderr.decode("utf-8", errors="replace").strip()
+        stderr = _redact(result.stderr.decode("utf-8", errors="replace").strip())
         raise CameraError(
             f"ffmpeg failed (rc={result.returncode}) capturing frame: {stderr}"
         )
