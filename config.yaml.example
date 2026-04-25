@@ -1,0 +1,18 @@
+interval_seconds: 60
+spray_duration: 3
+video_duration: 30
+
+gpio_pin: 17
+relay_active_high: true
+
+capture_dir: ./captures
+
+# Any OpenRouter model with vision support works here. Examples:
+#   anthropic/claude-haiku-4.5    (default — fast + cheap)
+#   anthropic/claude-sonnet-4.5   (more accurate on edge cases)
+#   openai/gpt-4o-mini            (fallback)
+#   google/gemini-2.5-flash       (fallback)
+detector_model: anthropic/claude-haiku-4.5
+detector_base_url: https://openrouter.ai/api/v1
+
+log_level: INFO
