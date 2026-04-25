@@ -21,16 +21,25 @@ On the Pi:
 
 ```bash
 sudo apt update
-sudo apt install -y python3-venv ffmpeg
+sudo apt install -y python3-venv ffmpeg swig liblgpio-dev
 
-git clone <this repo> /home/pi/bird-away
-cd /home/pi/bird-away
+git clone <this repo> /home/pi/git/bird-away
+cd /home/pi/git/bird-away
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 
 cp .env.example .env          # then edit: OPENROUTER_API_KEY, RTSP_URL
 cp config.yaml.example config.yaml   # then edit GPIO pin, durations, etc.
 ```
+
+`swig` and `liblgpio-dev` are needed so `pip` can build the `lgpio` wheel,
+which gpiozero uses as its GPIO backend on Raspberry Pi OS Bookworm/Trixie.
+Without it gpiozero falls back to an experimental native pin factory and
+prints `PinFactoryFallback` warnings on startup.
+
+The clone path above (`/home/pi/git/bird-away`) matches the paths baked into
+`systemd/bird-away.service`. If you install elsewhere, edit `WorkingDirectory`,
+`EnvironmentFile`, and `ExecStart` in that unit to match.
 
 ## Configure
 

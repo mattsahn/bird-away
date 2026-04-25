@@ -1,5 +1,6 @@
 openai>=1.40
 gpiozero>=2.0
+lgpio>=0.2
 python-dotenv>=1.0
 Pillow>=10.0
 PyYAML>=6.0
