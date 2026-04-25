@@ -30,7 +30,7 @@ class Config:
 DEFAULTS = {
     "interval_seconds": 60,
     "spray_duration": 3,
-    "video_duration": 30,
+    "video_duration": 7,
     "gpio_pin": 17,
     "relay_active_high": True,
     "capture_dir": "./captures",
