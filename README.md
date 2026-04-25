@@ -145,3 +145,84 @@ A few rules of thumb:
 - The `Sprinkler` class drives the GPIO low on `__exit__` and on close, so a
   clean exit (Ctrl-C, SIGTERM) will shut the valve. systemd will also restart
   the service on failure, which forces a fresh GPIO init.
+
+## Architecture
+
+```
+                  ┌──────────────────────────────────────────────────────┐
+                  │             Raspberry Pi (bird-away.service)         │
+                  └──────────────────────────────────────────────────────┘
+
+   Configuration
+   ─────────────
+       .env (secrets)         config.yaml (tunables)
+       ─────────────          ──────────────────────
+       OPENROUTER_API_KEY     interval_seconds, gpio_pin, spray_duration,
+       RTSP_URL               detector_model, detector_prompt, motion_*, …
+              │                       │
+              └─────────┬─────────────┘
+                        ▼
+                  src/config.py  ──►  Config dataclass (passed to all modules)
+
+
+   Per-iteration flow  (loops every cfg.interval_seconds in src/main.py)
+   ─────────────────────────────────────────────────────────────────────
+
+       ┌──────────────┐   JPEG bytes
+       │ RTSP camera  │ ─────────────►  src/camera.py
+       │  (IP cam)    │                 capture_frame()
+       └──────────────┘                       │
+                                              ▼
+                                    src/motion.py
+                                    MotionDetector.check()
+                                    (frame-diff gate, local)
+                                              │
+                          score < thresh ◄────┴────► score ≥ thresh
+                                │                          │
+                                ▼                          ▼
+                              sleep             src/detector.py
+                                                Detector.is_bird_present()
+                                                          │
+                                                          │  HTTPS
+                                                          ▼
+                                            ┌──────────────────────┐
+                                            │   OpenRouter API     │
+                                            │ (Claude vision model │
+                                            │  per detector_model) │
+                                            └──────────┬───────────┘
+                                                       │ "yes" / "no"
+                                                       ▼
+                                            ┌──────────┴──────────┐
+                                            │                     │
+                                            ▼  no                 ▼  yes
+                                          sleep             _handle_event()
+                                                                  │
+                                              ┌───────────────────┼──────────────────┐
+                                              ▼                   ▼                  ▼
+                                        save still         start ffmpeg       sprinkler.fire()
+                                        captures/          captures/          src/sprinkler.py
+                                        detection-*.jpg    event-*.mp4               │
+                                                           (30s clip)                │
+                                                                                     ▼
+                                                                            gpiozero + lgpio
+                                                                                     │
+                                                                                     ▼
+                                                                              GPIO pin 17
+
+   Hardware chain (off the Pi)
+   ───────────────────────────
+
+       GPIO 17 ──► Relay module ──► 12V solenoid valve ──► sprinkler ──► pool surface
+                   (active high/                ▲
+                    low configurable)           │
+                                          separate PSU
+                                          (never from Pi)
+
+
+   Background pieces
+   ─────────────────
+       systemd/bird-away.service  →  runs `python -m src.main` as user pi (group gpio),
+                                     restarts on failure, logs to journal
+       captures/                  →  unbounded; prune via cron / tmpfiles.d
+       scripts/test_*.py          →  per-stage smoke tests (camera / detector / sprinkler)
+```
