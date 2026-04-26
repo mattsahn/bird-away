@@ -2,8 +2,9 @@
 
 A Raspberry Pi service that watches a pool through an RTSP camera, asks Claude
 whether birds are present, and triggers a sprinkler (via relay + solenoid valve)
-to startle them. Each detection saves a still image and a 30-second video clip
-for review.
+to startle them. Each detection saves a still image and a short video clip,
+and can optionally publish both to a Cloudflare R2 bucket so they're viewable
+from anywhere on the internet.
 
 ## Hardware
 
@@ -49,12 +50,14 @@ The clone path above (`/home/pi/git/bird-away`) matches the paths baked into
   to whichever model `detector_model` selects.
 - `RTSP_URL` — full RTSP URL with credentials, e.g.
   `rtsp://user:pass@192.168.1.50:554/stream`.
+- `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` — only required if `r2_enabled:
+  true` in `config.yaml`. See [Remote publishing](#remote-publishing-cloudflare-r2).
 
 `config.yaml` (tunables):
 
 - `interval_seconds` — how often to sample (default `60`).
 - `spray_duration` — relay-on time in seconds when a bird is seen (default `3`).
-- `video_duration` — clip length in seconds saved per event (default `30`).
+- `video_duration` — clip length in seconds saved per event (default `7`).
 - `gpio_pin` — BCM pin number wired to the relay input (default `17`).
 - `relay_active_high` — `true` if the relay closes on logic-high, `false` if
   active-low (most cheap relay modules are active-low — check yours).
@@ -65,7 +68,53 @@ The clone path above (`/home/pi/git/bird-away`) matches the paths baked into
 - `detector_prompt` — system prompt sent to the vision model. Use a YAML
   literal block (`|`) to write it across multiple lines. See
   [Tuning the prompt](#tuning-the-prompt) for what makes a good one.
+- `daytime_only` — when `true` (default), only run detection between 07:00 and
+  19:00 local time. Set `false` to run 24/7 (e.g. for testing or with an IR
+  camera).
+- `motion_enabled`, `motion_threshold`, `motion_downscale` — local frame-diff
+  gate; only call the vision API when consecutive frames differ enough.
+  Threshold is on a 0-255 mean per-pixel scale; `5.0` is a reasonable start.
 - `log_level` — `INFO` or `DEBUG`.
+- R2 publishing keys (`r2_enabled`, `r2_account_id`, `r2_bucket`,
+  `r2_public_base_url`, `r2_key_prefix`) — see
+  [Remote publishing](#remote-publishing-cloudflare-r2).
+
+## Remote publishing (Cloudflare R2)
+
+Optional. When `r2_enabled: true`, each detection's snapshot JPEG and event
+MP4 are uploaded to a Cloudflare R2 bucket so you can view them from any
+browser. R2 is S3-compatible with no egress fees and a 10 GB free tier — for
+typical usage this stays free indefinitely with a 30-day lifecycle rule.
+
+1. Cloudflare → R2 → create a bucket (e.g. `bird-away`). In the bucket's
+   settings, enable the **R2.dev subdomain** and copy the
+   `https://pub-<hash>.r2.dev` URL.
+2. R2 → "Manage R2 API tokens" → **Create API token**, scope **Object Read &
+   Write** to that bucket. Save the **Access Key ID** and **Secret Access
+   Key** — they're shown once.
+3. Append to `.env`:
+
+   ```
+   R2_ACCESS_KEY_ID=...
+   R2_SECRET_ACCESS_KEY=...
+   ```
+
+4. Add to `config.yaml`:
+
+   ```yaml
+   r2_enabled: true
+   r2_account_id: <hex string from R2 dashboard>
+   r2_bucket: <bucket name>
+   r2_public_base_url: https://pub-<hash>.r2.dev
+   ```
+
+5. Optional: in the R2 dashboard, add a lifecycle rule "delete objects older
+   than 30 days" to keep storage under the free tier.
+
+Each detection produces two objects under
+`<r2_key_prefix>/YYYY-MM-DD/`: `detection-<ts>.jpg` and `event-<ts>.mp4`.
+Default `r2_key_prefix` is `events`. Local copies in `captures/` are
+unchanged — R2 is additive, not a replacement.
 
 ## Run by hand
 
@@ -155,59 +204,76 @@ A few rules of thumb:
 
    Configuration
    ─────────────
-       .env (secrets)         config.yaml (tunables)
-       ─────────────          ──────────────────────
-       OPENROUTER_API_KEY     interval_seconds, gpio_pin, spray_duration,
-       RTSP_URL               detector_model, detector_prompt, motion_*, …
-              │                       │
-              └─────────┬─────────────┘
-                        ▼
-                  src/config.py  ──►  Config dataclass (passed to all modules)
+       .env (secrets)            config.yaml (tunables)
+       ─────────────             ──────────────────────
+       OPENROUTER_API_KEY        interval_seconds, gpio_pin, spray_duration,
+       RTSP_URL                  detector_model, detector_prompt, motion_*,
+       R2_ACCESS_KEY_ID  *       daytime_only, r2_*  (* if r2_enabled), …
+       R2_SECRET_ACCESS_KEY  *
+              │                          │
+              └─────────────┬────────────┘
+                            ▼
+                    src/config.py  ──►  Config dataclass (passed to all modules)
 
 
    Per-iteration flow  (loops every cfg.interval_seconds in src/main.py)
    ─────────────────────────────────────────────────────────────────────
 
-       ┌──────────────┐   JPEG bytes
-       │ RTSP camera  │ ─────────────►  src/camera.py
-       │  (IP cam)    │                 capture_frame()
-       └──────────────┘                       │
-                                              ▼
-                                    src/motion.py
-                                    MotionDetector.check()
-                                    (frame-diff gate, local)
+   src/camera.py runs a background thread (PyAV / libav) that holds one
+   long-lived RTSP/TCP session and continuously decodes frames. The main
+   loop pulls the most recent JPEG from RAM in O(1) — no per-iteration
+   handshake.
+
+       ┌──────────────┐   persistent
+       │ RTSP camera  │◄───────────────►  src/camera.py
+       │  (IP cam)    │   H.264 stream    Camera class:
+       └──────────────┘                     • bg thread: av.open + decode
+                                            • capture_frame() → latest JPEG
                                               │
-                          score < thresh ◄────┴────► score ≥ thresh
-                                │                          │
-                                ▼                          ▼
-                              sleep             src/detector.py
-                                                Detector.is_bird_present()
-                                                          │
-                                                          │  HTTPS
-                                                          ▼
-                                            ┌──────────────────────┐
-                                            │   OpenRouter API     │
-                                            │ (Claude vision model │
-                                            │  per detector_model) │
-                                            └──────────┬───────────┘
-                                                       │ "yes" / "no"
-                                                       ▼
-                                            ┌──────────┴──────────┐
-                                            │                     │
-                                            ▼  no                 ▼  yes
-                                          sleep             _handle_event()
-                                                                  │
-                                              ┌───────────────────┼──────────────────┐
-                                              ▼                   ▼                  ▼
-                                        save still         start ffmpeg       sprinkler.fire()
-                                        captures/          captures/          src/sprinkler.py
-                                        detection-*.jpg    event-*.mp4               │
-                                                           (30s clip)                │
-                                                                                     ▼
-                                                                            gpiozero + lgpio
-                                                                                     │
-                                                                                     ▼
-                                                                              GPIO pin 17
+                                              ▼
+                                  daytime_only gate (07:00-19:00 local)
+                                              │
+                                  outside ◄───┴───► inside
+                                     │                │
+                                     ▼                ▼
+                                   sleep      src/motion.py
+                                              MotionDetector.check()
+                                              (frame-diff gate, local)
+                                                      │
+                                  score < thresh ◄────┴────► score ≥ thresh
+                                        │                          │
+                                        ▼                          ▼
+                                      sleep             src/detector.py
+                                                        downscale → 512px
+                                                        Detector.is_bird_present()
+                                                                  │ HTTPS
+                                                                  ▼
+                                                    ┌──────────────────────┐
+                                                    │   OpenRouter API     │
+                                                    │ (Claude vision model │
+                                                    │  per detector_model) │
+                                                    └──────────┬───────────┘
+                                                               │ "yes" / "no"
+                                                               ▼
+                                                    ┌──────────┴──────────┐
+                                                    ▼  no                 ▼  yes
+                                                  sleep             _handle_event()
+                                                                          │
+                              ┌───────────────────────────────────────────┤
+                              ▼                                           ▼
+                      pause bg thread,                        save still + spawn
+                      spawn ffmpeg                            ffmpeg recorder
+                      (separate RTSP                          (captures/event-*.mp4)
+                       session, camera                                    │
+                       only allows 1-2)                          ┌────────┴────────┐
+                              │                                  ▼                 ▼
+                              ▼                          src/sprinkler.py    src/uploader.py
+                       resume bg thread                  GPIO via gpiozero   R2Uploader
+                       after ffmpeg                      + lgpio             (boto3 → S3 API)
+                                                                │                 │
+                                                                ▼                 ▼
+                                                          GPIO pin 17       Cloudflare R2
+                                                                            (public bucket)
 
    Hardware chain (off the Pi)
    ───────────────────────────
