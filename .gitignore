@@ -6,6 +6,7 @@ venv/
 
 .env
 config.yaml
+scripts/models_config.yaml
 
 captures/
 *.log

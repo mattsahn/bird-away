@@ -141,6 +141,15 @@ frame so you can see how each one handles the same input. Useful when picking
 `detector_model` or tuning `detector_prompt` against tricky frames (small
 distant birds, glare on water, dawn light, etc.).
 
+First-time setup — copy the example config (the actual file is gitignored
+so your local tweaks stay out of the repo):
+
+```bash
+cp scripts/models_config.yaml.example scripts/models_config.yaml
+```
+
+Then run against any local image:
+
 ```bash
 .venv/bin/python scripts/test_models.py captures/detection-20260426T131922Z.jpg
 ```
@@ -149,9 +158,10 @@ Each model gets two prompts: a yes/no classifier (the project's bird detector
 by default) and a freeform description (asks the model to describe the scene,
 animals, people, actions). Both prompts and the model list live in
 `scripts/models_config.yaml` and can be overridden — pass `--config <path>`
-to use an alternate file. The script prints the raw response from each model
-along with elapsed time and token usage, so you can compare quality, cost,
-and latency at a glance.
+to use an alternate file (handy for keeping multiple variants like
+`models_config.yaml.person` or `.pool` side by side). The script prints the
+raw response from each model along with the input resolution, elapsed time,
+and token usage so you can compare quality, cost, and latency at a glance.
 
 ## Run as a service
 
