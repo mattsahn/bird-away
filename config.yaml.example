@@ -33,4 +33,20 @@ motion_enabled: true
 motion_threshold: 5.0
 motion_downscale: 320
 
+# Only run detection between 07:00 and 19:00 local time. Default true to
+# avoid burning API tokens on dark frames at night. Set false for testing
+# or if your setup actually needs nighttime coverage (IR camera, etc).
+daytime_only: true
+
+# Cloudflare R2 publishing (optional). When enabled, each detection's
+# snapshot + event video are uploaded to a bucket so they're viewable
+# from anywhere. Setup: create an R2 bucket, enable its public r2.dev
+# subdomain, create an "Object Read & Write"-scoped API token, and put
+# R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY into .env.
+r2_enabled: false
+r2_account_id: ""           # from R2 dashboard (the long hex string)
+r2_bucket: ""               # bucket name, e.g. bird-away
+r2_public_base_url: ""      # e.g. https://pub-<hash>.r2.dev
+r2_key_prefix: events       # objects land at <prefix>/YYYY-MM-DD/<file>
+
 log_level: INFO

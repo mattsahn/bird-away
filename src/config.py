@@ -25,6 +25,12 @@ class Config:
     motion_threshold: float
     motion_downscale: int
     log_level: str
+    daytime_only: bool
+    r2_enabled: bool
+    r2_account_id: str
+    r2_bucket: str
+    r2_public_base_url: str
+    r2_key_prefix: str
 
 
 DEFAULTS = {
@@ -46,6 +52,12 @@ DEFAULTS = {
     "motion_threshold": 5.0,
     "motion_downscale": 320,
     "log_level": "INFO",
+    "daytime_only": True,
+    "r2_enabled": False,
+    "r2_account_id": "",
+    "r2_bucket": "",
+    "r2_public_base_url": "",
+    "r2_key_prefix": "events",
 }
 
 
@@ -67,6 +79,16 @@ def load_config(yaml_path: Path | str = "config.yaml") -> Config:
 
     merged = {**DEFAULTS, **data}
 
+    if bool(merged["r2_enabled"]):
+        missing = [
+            k for k in ("r2_account_id", "r2_bucket", "r2_public_base_url")
+            if not str(merged.get(k, "")).strip()
+        ]
+        if missing:
+            raise RuntimeError(
+                f"r2_enabled is true but these config keys are empty: {', '.join(missing)}"
+            )
+
     return Config(
         openrouter_api_key=api_key,
         rtsp_url=rtsp_url,
@@ -83,4 +105,10 @@ def load_config(yaml_path: Path | str = "config.yaml") -> Config:
         motion_threshold=float(merged["motion_threshold"]),
         motion_downscale=int(merged["motion_downscale"]),
         log_level=str(merged["log_level"]).upper(),
+        daytime_only=bool(merged["daytime_only"]),
+        r2_enabled=bool(merged["r2_enabled"]),
+        r2_account_id=str(merged["r2_account_id"]),
+        r2_bucket=str(merged["r2_bucket"]),
+        r2_public_base_url=str(merged["r2_public_base_url"]),
+        r2_key_prefix=str(merged["r2_key_prefix"]).strip("/"),
     )
