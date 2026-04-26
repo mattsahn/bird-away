@@ -41,18 +41,21 @@ class Camera:
         encode_interval_s: float = 1.0,
         reconnect_delay_s: float = 3.0,
         socket_timeout_s: float = 10.0,
+        stale_restart_s: float = 30.0,
         jpeg_quality: int = 85,
     ) -> None:
         self._rtsp_url = rtsp_url
         self._encode_interval_s = encode_interval_s
         self._reconnect_delay_s = reconnect_delay_s
+        self._socket_timeout_s = socket_timeout_s
         self._socket_timeout_us = str(int(socket_timeout_s * 1_000_000))
+        self._stale_restart_s = stale_restart_s
         self._jpeg_quality = jpeg_quality
 
         self._latest_jpeg: bytes | None = None
         self._latest_at: float = 0.0
         self._lock = threading.Lock()
-        self._stop = threading.Event()
+        self._stop: threading.Event | None = None
         self._thread: threading.Thread | None = None
 
     def __enter__(self) -> "Camera":
@@ -65,32 +68,48 @@ class Camera:
     def start(self) -> None:
         if self._thread is not None:
             return
-        self._stop.clear()
+        stop = threading.Event()
+        self._stop = stop
         self._thread = threading.Thread(
-            target=self._run, name="camera-rtsp", daemon=True
+            target=self._run, args=(stop,), name="camera-rtsp", daemon=True
         )
         self._thread.start()
 
     def close(self) -> None:
-        self._stop.set()
-        if self._thread is not None:
-            self._thread.join(timeout=5.0)
-            self._thread = None
+        if self._stop is not None:
+            self._stop.set()
+        thread = self._thread
+        self._thread = None
+        self._stop = None
+        if thread is not None:
+            thread.join(timeout=5.0)
 
     def capture_frame(self, max_age_s: float = 5.0, wait_s: float = 10.0) -> bytes:
         """Return the most recently decoded frame as JPEG bytes.
 
-        Blocks up to wait_s for a frame younger than max_age_s.
+        Blocks up to wait_s for a frame younger than max_age_s. If the
+        latest frame is older than stale_restart_s, force-restarts the
+        background decode thread once before giving up — guards against
+        libav blocking forever on a silent socket.
         """
         deadline = time.monotonic() + wait_s
+        restarted = False
         while True:
             with self._lock:
                 jpeg = self._latest_jpeg
                 latest_at = self._latest_at
-            if jpeg is not None:
-                age = time.monotonic() - latest_at
-                if age <= max_age_s:
-                    return jpeg
+            age = (time.monotonic() - latest_at) if jpeg is not None else float("inf")
+            if jpeg is not None and age <= max_age_s:
+                return jpeg
+            if jpeg is not None and not restarted and age >= self._stale_restart_s:
+                logger.warning(
+                    "camera_force_restart age=%.0fs (decode thread appears stuck)",
+                    age,
+                )
+                self.close()
+                self.start()
+                restarted = True
+                deadline = time.monotonic() + wait_s
             if time.monotonic() >= deadline:
                 if jpeg is None:
                     raise CameraError(
@@ -138,11 +157,11 @@ class Camera:
         logger.info("camera_resuming_after_recording")
         self.start()
 
-    def _run(self) -> None:
-        while not self._stop.is_set():
+    def _run(self, stop: threading.Event) -> None:
+        while not stop.is_set():
             try:
-                self._stream_loop()
-                if not self._stop.is_set():
+                self._stream_loop(stop)
+                if not stop.is_set():
                     logger.warning(
                         "camera_stream_eof reconnecting_in=%.1fs",
                         self._reconnect_delay_s,
@@ -154,15 +173,19 @@ class Camera:
                 )
             except Exception:
                 logger.exception("camera_stream_unexpected reconnecting")
-            self._stop.wait(self._reconnect_delay_s)
+            stop.wait(self._reconnect_delay_s)
 
-    def _stream_loop(self) -> None:
+    def _stream_loop(self, stop: threading.Event) -> None:
         container = av.open(
             self._rtsp_url,
             options={
                 "rtsp_transport": "tcp",
+                # libav names: stimeout (FFmpeg <6) and timeout (FFmpeg 6+).
+                # Both are accepted; unknown ones are silently ignored.
                 "stimeout": self._socket_timeout_us,
+                "timeout": self._socket_timeout_us,
             },
+            timeout=(self._socket_timeout_s, self._socket_timeout_s),
         )
         try:
             stream = container.streams.video[0]
@@ -175,7 +198,7 @@ class Camera:
             )
             last_encode = 0.0
             for frame in container.decode(stream):
-                if self._stop.is_set():
+                if stop.is_set():
                     return
                 now = time.monotonic()
                 if now - last_encode >= self._encode_interval_s:
