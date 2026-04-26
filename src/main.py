@@ -150,8 +150,9 @@ def main() -> int:
                         "above_threshold" if moved else "below_threshold_skip_detector",
                     )
                 if run_detector:
-                    if detector.is_bird_present(frame):
-                        _handle_event(cfg, cam, frame, sprinkler, uploader=uploader)
+                    prepared = detector.prepare_image(frame)
+                    if detector.is_bird_present(prepared):
+                        _handle_event(cfg, cam, prepared, sprinkler, uploader=uploader)
                     else:
                         logger.info("detector_result=no_bird")
             except _SkipIteration:
