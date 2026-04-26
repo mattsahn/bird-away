@@ -27,7 +27,12 @@ class Detector:
         self._max_image_dim = max_image_dim
         self._jpeg_quality = jpeg_quality
 
-    def _downscale(self, image_bytes: bytes) -> bytes:
+    def prepare_image(self, image_bytes: bytes) -> bytes:
+        """Return the JPEG bytes that would be sent to the model.
+
+        Downscales to max_image_dim on the longer edge if the input is
+        larger; otherwise returns the input unchanged.
+        """
         if self._max_image_dim <= 0:
             return image_bytes
         img = Image.open(io.BytesIO(image_bytes))
@@ -36,15 +41,15 @@ class Detector:
         img.thumbnail((self._max_image_dim, self._max_image_dim))
         buf = io.BytesIO()
         img.convert("RGB").save(buf, format="JPEG", quality=self._jpeg_quality)
-        return buf.getvalue()
+        out = buf.getvalue()
+        logger.info(
+            "detector_image_prepared size_in=%dB size_out=%dB",
+            len(image_bytes), len(out),
+        )
+        return out
 
     def is_bird_present(self, image_bytes: bytes) -> bool:
-        small = self._downscale(image_bytes)
-        logger.info(
-            "detector_image size_in=%dB size_out=%dB",
-            len(image_bytes), len(small),
-        )
-        b64 = base64.standard_b64encode(small).decode("ascii")
+        b64 = base64.standard_b64encode(image_bytes).decode("ascii")
         data_uri = f"data:image/jpeg;base64,{b64}"
         try:
             resp = self._client.chat.completions.create(
