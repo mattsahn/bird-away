@@ -23,6 +23,7 @@ from pathlib import Path
 import yaml
 from dotenv import load_dotenv
 from openai import OpenAI, OpenAIError
+from PIL import Image
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
@@ -81,10 +82,12 @@ def _ask(
 
 
 def _format_meta(meta: dict) -> str:
-    parts = [f"{meta['elapsed_s']:.2f}s"]
+    parts = [f"elapsed={meta['elapsed_s']:.2f}s"]
     if "total_tokens" in meta:
         parts.append(
-            f"{meta['prompt_tokens']}+{meta['completion_tokens']}={meta['total_tokens']} tok"
+            f"tokens: prompt={meta['prompt_tokens']} "
+            f"completion={meta['completion_tokens']} "
+            f"total={meta['total_tokens']}"
         )
     return ", ".join(parts)
 
@@ -116,6 +119,9 @@ def main() -> int:
     description_max_tokens = int(cfg.get("description_max_tokens", 500))
 
     image_bytes = args.image.read_bytes()
+    with Image.open(args.image) as img:
+        width, height = img.size
+        img_format = img.format or "?"
     b64 = base64.standard_b64encode(image_bytes).decode("ascii")
     data_uri = f"data:image/jpeg;base64,{b64}"
 
@@ -126,7 +132,10 @@ def main() -> int:
 
     bar = "=" * 72
     print(bar)
-    print(f"image:  {args.image} ({len(image_bytes)} bytes)")
+    print(
+        f"image:  {args.image} "
+        f"({width}x{height} {img_format}, {len(image_bytes)} bytes)"
+    )
     print(f"config: {args.config}")
     print(f"models: {len(models)}")
     print(bar)
