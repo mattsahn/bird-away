@@ -158,10 +158,9 @@ Each model gets two prompts: a yes/no classifier (the project's bird detector
 by default) and a freeform description (asks the model to describe the scene,
 animals, people, actions). Both prompts and the model list live in
 `scripts/models_config.yaml` and can be overridden — pass `--config <path>`
-to use an alternate file (handy for keeping multiple variants like
-`models_config.yaml.person` or `.pool` side by side). The script prints the
-raw response from each model along with the input resolution, elapsed time,
-and token usage so you can compare quality, cost, and latency at a glance.
+to use an alternate file. The script prints the raw response from each model
+along with the input resolution, elapsed time, and token usage so you can
+compare quality, cost, and latency at a glance.
 
 ## Run as a service
 
