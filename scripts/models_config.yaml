@@ -1,0 +1,33 @@
+# Config for scripts/test_models.py
+#
+# Lists vision-capable models to compare on a single local image. The
+# script runs two prompts per model: a yes/no classifier and a freeform
+# description. Override either prompt below if you want.
+
+models:
+  - anthropic/claude-haiku-4.5
+  - anthropic/claude-sonnet-4.5
+  - openai/gpt-4o-mini
+  - google/gemini-2.5-flash
+  - google/gemini-3-flash-preview
+
+# Yes/no classification prompt. Default is the project's bird-detection
+# prompt; override e.g. to test the person-detection variant.
+classification_prompt: |
+  You are a bird detector for a backyard pool. Respond with exactly 'yes'
+  if you see one or more birds in, on, or near the pool (including birds
+  in flight directly above it). Respond with exactly 'no' otherwise.
+  Output only the single word.
+
+# Freeform description prompt. Use this to gauge how well each model
+# actually understands the scene, beyond the binary classifier.
+description_prompt: |
+  Describe this image in detail. Note any people, animals, or other
+  notable objects, their approximate position in the frame, any actions
+  they appear to be taking, and the overall scene context. Be specific
+  about colors, lighting, and anything unusual.
+
+# Max tokens per call. Classification only needs a word; description
+# can be longer.
+classification_max_tokens: 4
+description_max_tokens: 500

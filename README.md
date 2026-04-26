@@ -134,6 +134,25 @@ Run these one at a time to verify each piece of the chain.
 .venv/bin/python scripts/test_sprinkler.py 1   # clicks relay for 1 second
 ```
 
+## Comparing models
+
+`scripts/test_models.py` runs a list of vision models against a single saved
+frame so you can see how each one handles the same input. Useful when picking
+`detector_model` or tuning `detector_prompt` against tricky frames (small
+distant birds, glare on water, dawn light, etc.).
+
+```bash
+.venv/bin/python scripts/test_models.py captures/detection-20260426T131922Z.jpg
+```
+
+Each model gets two prompts: a yes/no classifier (the project's bird detector
+by default) and a freeform description (asks the model to describe the scene,
+animals, people, actions). Both prompts and the model list live in
+`scripts/models_config.yaml` and can be overridden — pass `--config <path>`
+to use an alternate file. The script prints the raw response from each model
+along with elapsed time and token usage, so you can compare quality, cost,
+and latency at a glance.
+
 ## Run as a service
 
 ```bash
