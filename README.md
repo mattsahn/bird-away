@@ -204,6 +204,39 @@ journalctl -u bird-away -f
 The unit runs as user `pi` in group `gpio`. Adjust `User=`, `Group=`, and the
 paths in `bird-away.service` if your install location differs.
 
+## Resilience for unattended deployments
+
+For setups that need to run for months without intervention, the unit ships
+with two watchdogs and `Restart=always`. The defaults Just Work, but two
+extra one-time setup steps make recovery faster.
+
+**Software watchdog (already wired up).** The service uses `Type=notify` and
+the main loop pings `WATCHDOG=1` at the top of each iteration and once per
+second while sleeping. If the loop hangs for more than `WatchdogSec=120`,
+systemd kills and restarts the process. Combined with `Restart=always` this
+also catches clean exits, OOM kills, segfaults — anything short of a kernel
+hang.
+
+**Hardware watchdog (one-time system config).** The Pi's BCM watchdog will
+reset the SoC if the kernel itself hangs (rare but possible — bad SD card
+sector, GPU lockup). On Pi 4/5 with current Pi OS, `/dev/watchdog` is
+already exposed; you just need to tell systemd to use it:
+
+```bash
+sudo sed -i 's/^#RuntimeWatchdogSec=off/RuntimeWatchdogSec=15/' /etc/systemd/system.conf
+sudo systemctl daemon-reexec
+```
+
+On older Pi OS (Bullseye and earlier) you may also need
+`dtparam=watchdog=on` in `/boot/firmware/config.txt` (or `/boot/config.txt`
+on pre-Bookworm) followed by a reboot. Check `ls /dev/watchdog` first — if
+it exists, you're already set.
+
+**Liveness alerting.** Set `healthcheck_url` in `config.yaml` to a free
+[healthchecks.io](https://healthchecks.io) URL — see the config docs above.
+This catches the failure mode where the loop is alive and pinging the
+watchdog but every iteration is throwing (e.g. RTSP camera unreachable).
+
 ## Tuning
 
 - **False positives** (sprays when no birds): tighten `detector_prompt` in
@@ -212,8 +245,9 @@ paths in `bird-away.service` if your install location differs.
   `anthropic/claude-sonnet-4.5`).
 - **Birds aren't fazed**: increase `spray_duration`, or check that the spray
   pattern actually covers where they land.
-- **Storage filling up**: `captures/` grows unbounded. Add a cron job or
-  `tmpfiles.d` rule to prune files older than N days.
+- **Storage filling up**: tune `retention_days` (default `7`). The service
+  prunes `captures/` at startup and hourly. R2 lifecycle rules handle the
+  cloud copy.
 
 ### Tuning the prompt
 

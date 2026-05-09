@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import logging
+import os
 import signal
+import socket
 import subprocess
 import sys
 import threading
@@ -65,6 +67,21 @@ def _safe_upload(uploader: R2Uploader, local_path: Path, key: str) -> None:
         uploader.upload_file(local_path, key)
     except Exception:
         logger.exception("r2_upload_failed key=%s", key)
+
+
+def _sd_notify(message: str) -> None:
+    """Send a state message to systemd via $NOTIFY_SOCKET. No-op if unset."""
+    sock_path = os.environ.get("NOTIFY_SOCKET")
+    if not sock_path:
+        return
+    # Abstract namespace sockets are prefixed with "@" in the env var.
+    if sock_path.startswith("@"):
+        sock_path = "\0" + sock_path[1:]
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM) as s:
+            s.sendto(message.encode("utf-8"), sock_path)
+    except OSError as e:
+        logger.warning("sd_notify_failed %s message=%s", type(e).__name__, message)
 
 
 def _ping_healthcheck(url: str, timeout: float = 5.0) -> None:
@@ -147,6 +164,7 @@ def main() -> int:
     _setup_logging(cfg.log_level)
     cfg.capture_dir.mkdir(parents=True, exist_ok=True)
     logger.info("starting", extra={"capture_dir": str(cfg.capture_dir)})
+    _sd_notify("READY=1")
     _prune_old_captures(cfg.capture_dir, cfg.retention_days)
     next_prune_at = time.monotonic() + RETENTION_SWEEP_INTERVAL_S
     if cfg.healthcheck_url:
@@ -210,6 +228,7 @@ def main() -> int:
         )
         try:
             while not stop.requested:
+                _sd_notify("WATCHDOG=1")
                 iter_start = time.monotonic()
                 if iter_start >= next_prune_at:
                     _prune_old_captures(cfg.capture_dir, cfg.retention_days)
@@ -263,8 +282,10 @@ def main() -> int:
                 sleep_for = max(0.0, cfg.interval_seconds - elapsed)
                 end = time.monotonic() + sleep_for
                 while not stop.requested and time.monotonic() < end:
+                    _sd_notify("WATCHDOG=1")
                     time.sleep(min(1.0, end - time.monotonic()))
         finally:
+            _sd_notify("STOPPING=1")
             if trigger is not None:
                 trigger.close()
 

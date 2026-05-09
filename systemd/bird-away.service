@@ -4,14 +4,21 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-Type=simple
+Type=notify
+NotifyAccess=main
 User=pi
 Group=gpio
 WorkingDirectory=/home/pi/git/bird-away
 EnvironmentFile=/home/pi/git/bird-away/.env
 ExecStart=/home/pi/git/bird-away/.venv/bin/python -m src.main
-Restart=on-failure
+Restart=always
 RestartSec=10
+# Kill + restart if the main loop hasn't pinged WATCHDOG=1 within this many
+# seconds. The loop pings at the top of each iteration and once per second
+# during sleep, so 120s comfortably covers normal event handling (camera
+# reconnect ~40s + detector API ~30s + recording wait video_duration+10s).
+# Bump this if you raise video_duration significantly.
+WatchdogSec=120
 StandardOutput=journal
 StandardError=journal
 
