@@ -62,11 +62,33 @@ def _r2_key(cfg: Config, date_prefix: str, path: Path) -> str:
     return f"{cfg.r2_key_prefix}/{date_prefix}/{path.name}"
 
 
-def _safe_upload(uploader: R2Uploader, local_path: Path, key: str) -> None:
+def _safe_upload(uploader: R2Uploader, local_path: Path, key: str) -> bool:
     try:
         uploader.upload_file(local_path, key)
+        return True
     except Exception:
         logger.exception("r2_upload_failed key=%s", key)
+        return False
+
+
+def _safe_upload_bytes(
+    uploader: R2Uploader, data: bytes, key: str, content_type: str
+) -> bool:
+    try:
+        uploader.upload_bytes(data, key, content_type=content_type)
+        return True
+    except Exception:
+        logger.exception("r2_upload_failed key=%s", key)
+        return False
+
+
+def _safe_unlink(path: Path) -> None:
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        pass
+    except Exception:
+        logger.exception("local_unlink_failed path=%s", path)
 
 
 def _sd_notify(message: str) -> None:
@@ -131,10 +153,17 @@ def _handle_event(
     date_prefix = now.strftime("%Y-%m-%d")
     image_path = cfg.capture_dir / f"detection-{ts}.jpg"
     video_path = cfg.capture_dir / f"event-{ts}.mp4"
-    image_path.write_bytes(frame)
 
-    if uploader is not None:
-        _safe_upload(uploader, image_path, _r2_key(cfg, date_prefix, image_path))
+    # JPEG: when delete_after_upload is on, never touch disk — push the
+    # bytes we already have straight to R2.
+    if uploader is not None and cfg.delete_after_upload:
+        _safe_upload_bytes(
+            uploader, frame, _r2_key(cfg, date_prefix, image_path), "image/jpeg",
+        )
+    else:
+        image_path.write_bytes(frame)
+        if uploader is not None:
+            _safe_upload(uploader, image_path, _r2_key(cfg, date_prefix, image_path))
 
     rec = cam.start_recording(video_path, cfg.video_duration)
     try:
@@ -150,8 +179,13 @@ def _handle_event(
     finally:
         cam.resume()
 
+    video_uploaded = False
     if uploader is not None and video_path.exists():
-        _safe_upload(uploader, video_path, _r2_key(cfg, date_prefix, video_path))
+        video_uploaded = _safe_upload(
+            uploader, video_path, _r2_key(cfg, date_prefix, video_path),
+        )
+    if cfg.delete_after_upload and video_uploaded:
+        _safe_unlink(video_path)
 
     logger.info(
         "bird_detected_and_sprayed",

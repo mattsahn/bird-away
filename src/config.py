@@ -38,6 +38,7 @@ class Config:
     retention_days: int
     healthcheck_url: str
     healthcheck_interval_seconds: int
+    delete_after_upload: bool
 
 
 DEFAULTS = {
@@ -72,6 +73,7 @@ DEFAULTS = {
     "retention_days": 7,
     "healthcheck_url": "",
     "healthcheck_interval_seconds": 300,
+    "delete_after_upload": False,
 }
 
 
@@ -103,6 +105,12 @@ def load_config(yaml_path: Path | str = "config.yaml") -> Config:
                 f"r2_enabled is true but these config keys are empty: {', '.join(missing)}"
             )
 
+    if bool(merged["delete_after_upload"]) and not bool(merged["r2_enabled"]):
+        raise RuntimeError(
+            "delete_after_upload requires r2_enabled: true (otherwise captures "
+            "would be deleted with no remote copy)"
+        )
+
     return Config(
         openrouter_api_key=api_key,
         rtsp_url=rtsp_url,
@@ -132,4 +140,5 @@ def load_config(yaml_path: Path | str = "config.yaml") -> Config:
         retention_days=int(merged["retention_days"]),
         healthcheck_url=str(merged["healthcheck_url"]).strip(),
         healthcheck_interval_seconds=int(merged["healthcheck_interval_seconds"]),
+        delete_after_upload=bool(merged["delete_after_upload"]),
     )

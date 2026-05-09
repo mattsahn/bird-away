@@ -69,6 +69,13 @@ r2_bucket: ""               # bucket name, e.g. bird-away
 r2_public_base_url: ""      # e.g. https://pub-<hash>.r2.dev
 r2_key_prefix: events       # objects land at <prefix>/YYYY-MM-DD/<file>
 
+# When true, do not keep local copies of captures: upload the JPEG straight
+# from memory (no disk write at all) and delete the MP4 immediately after
+# its R2 upload succeeds. Combine with capture_dir: /dev/shm/bird-away to
+# eliminate SD-card writes entirely. Requires r2_enabled: true. See the
+# README "Minimizing SD-card writes" section.
+delete_after_upload: false
+
 # Liveness ping to healthchecks.io (or any URL that accepts a GET). The
 # service pings this URL after each successful loop iteration, rate-limited
 # to once per healthcheck_interval_seconds. If the loop hangs or every

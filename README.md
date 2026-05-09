@@ -106,6 +106,10 @@ The clone path above (`/home/pi/git/bird-away`) matches the paths baked into
 - R2 publishing keys (`r2_enabled`, `r2_account_id`, `r2_bucket`,
   `r2_public_base_url`, `r2_key_prefix`) — see
   [Remote publishing](#remote-publishing-cloudflare-r2).
+- `delete_after_upload` — when `true`, skip the local JPEG write entirely
+  and delete each MP4 right after R2 confirms the upload. Requires
+  `r2_enabled: true`. Pair with `capture_dir: /dev/shm/bird-away` for
+  zero SD-card writes. See [Minimizing SD-card writes](#minimizing-sd-card-writes).
 
 ## Remote publishing (Cloudflare R2)
 
@@ -141,8 +145,10 @@ typical usage this stays free indefinitely with a 30-day lifecycle rule.
 
 Each detection produces two objects under
 `<r2_key_prefix>/YYYY-MM-DD/`: `detection-<ts>.jpg` and `event-<ts>.mp4`.
-Default `r2_key_prefix` is `events`. Local copies in `captures/` are
-unchanged — R2 is additive, not a replacement.
+Default `r2_key_prefix` is `events`. By default R2 is additive — local
+copies in `captures/` are also written and pruned by `retention_days`. To
+make R2 the only copy and stop writing to the SD card, see
+[Minimizing SD-card writes](#minimizing-sd-card-writes).
 
 ## Run by hand
 
@@ -203,6 +209,48 @@ journalctl -u bird-away -f
 
 The unit runs as user `pi` in group `gpio`. Adjust `User=`, `Group=`, and the
 paths in `bird-away.service` if your install location differs.
+
+## Minimizing SD-card writes
+
+For unattended deployments, SD-card wear is the most common cause of Pi
+death — every snapshot JPEG and event MP4 written to `captures/` consumes
+write cycles. Cards typically tolerate 10k-100k writes per cell, and a busy
+day at the pool can produce dozens of MB; over months that adds up.
+
+Two settings together eliminate ~all capture-related SD writes:
+
+```yaml
+r2_enabled: true             # uploads still go to R2
+delete_after_upload: true    # don't keep a local copy
+capture_dir: /dev/shm/bird-away   # tmpfs (RAM); never touches the SD card
+```
+
+How it works:
+
+- **JPEG snapshot.** With `delete_after_upload: true`, the bytes are
+  uploaded straight from memory via `put_object` — `write_bytes` is never
+  called and `image_path` never exists on disk.
+- **Event MP4.** ffmpeg has to write to a path, so the file lives briefly
+  in `capture_dir` while it records. With `capture_dir` pointed at
+  `/dev/shm` (a kernel-managed tmpfs sized to half of RAM by default),
+  that "file" lives in RAM. Once the R2 upload returns success, the file
+  is deleted. If the upload fails, the file stays so `retention_days` can
+  clean it up later.
+- **Bonus (`/dev/shm`).** Faster than the SD card and survives nothing —
+  a reboot wipes it. That's exactly what you want for transient capture
+  data once R2 has the durable copy.
+
+Tradeoff to know: with `delete_after_upload: true`, an extended R2 outage
+loses captures (failed uploads stay on disk only until `retention_days`
+expires, vs. the default behavior where they persist until you manually
+copy them off). For a deterrent system this is usually the right trade —
+SD-card death is permanent, a missed video clip is not.
+
+If you want to keep the local copies (for debugging, or because you don't
+have R2 set up), leave `delete_after_upload: false` (the default) and let
+`retention_days` bound disk usage. You can still point `capture_dir` at
+`/dev/shm/bird-away` to get RAM-backed storage with retention-based
+cleanup — useful if you want a few days of local history without SD wear.
 
 ## Resilience for unattended deployments
 

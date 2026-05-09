@@ -49,6 +49,24 @@ class R2Uploader:
         logger.info("r2_upload_ok key=%s url=%s", key, url or "(no public_base_url)")
         return url
 
+    def upload_bytes(
+        self, data: bytes, key: str, content_type: str = "application/octet-stream"
+    ) -> str | None:
+        try:
+            self._client.put_object(
+                Bucket=self._bucket, Key=key, Body=data, ContentType=content_type,
+            )
+        except (BotoCoreError, ClientError) as e:
+            raise UploadError(
+                f"r2 upload failed for key={key}: {type(e).__name__}"
+            ) from None
+        url = f"{self._public_base_url}/{key}" if self._public_base_url else None
+        logger.info(
+            "r2_upload_ok key=%s bytes=%d url=%s",
+            key, len(data), url or "(no public_base_url)",
+        )
+        return url
+
 
 def make_uploader(cfg: "Config") -> R2Uploader | None:
     if not cfg.r2_enabled:
