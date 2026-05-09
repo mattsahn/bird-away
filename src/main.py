@@ -9,6 +9,8 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+import httpx
+
 from .camera import Camera
 from .config import Config, load_config
 from .detector import Detector
@@ -63,6 +65,15 @@ def _safe_upload(uploader: R2Uploader, local_path: Path, key: str) -> None:
         uploader.upload_file(local_path, key)
     except Exception:
         logger.exception("r2_upload_failed key=%s", key)
+
+
+def _ping_healthcheck(url: str, timeout: float = 5.0) -> None:
+    if not url:
+        return
+    try:
+        httpx.get(url, timeout=timeout)
+    except Exception as e:
+        logger.warning("healthcheck_ping_failed %s", type(e).__name__)
 
 
 def _prune_old_captures(capture_dir: Path, retention_days: int) -> None:
@@ -138,6 +149,11 @@ def main() -> int:
     logger.info("starting", extra={"capture_dir": str(cfg.capture_dir)})
     _prune_old_captures(cfg.capture_dir, cfg.retention_days)
     next_prune_at = time.monotonic() + RETENTION_SWEEP_INTERVAL_S
+    if cfg.healthcheck_url:
+        logger.info(
+            "healthcheck_enabled interval=%ds", cfg.healthcheck_interval_seconds,
+        )
+    last_healthcheck_at = 0.0
 
     stop = _Stop()
     signal.signal(signal.SIGTERM, stop.request)
@@ -198,6 +214,7 @@ def main() -> int:
                 if iter_start >= next_prune_at:
                     _prune_old_captures(cfg.capture_dir, cfg.retention_days)
                     next_prune_at = time.monotonic() + RETENTION_SWEEP_INTERVAL_S
+                iteration_ok = False
                 try:
                     if cfg.daytime_only and not _in_daytime():
                         logger.info(
@@ -227,10 +244,20 @@ def main() -> int:
                                 _handle_event(cfg, cam, prepared, sprinkler, uploader=uploader)
                         else:
                             logger.info("detector_result=no_bird")
+                    iteration_ok = True
                 except _SkipIteration:
-                    pass
+                    iteration_ok = True
                 except Exception:
                     logger.exception("loop_iteration_failed")
+
+                if (
+                    iteration_ok
+                    and cfg.healthcheck_url
+                    and time.monotonic() - last_healthcheck_at
+                    >= cfg.healthcheck_interval_seconds
+                ):
+                    _ping_healthcheck(cfg.healthcheck_url)
+                    last_healthcheck_at = time.monotonic()
 
                 elapsed = time.monotonic() - iter_start
                 sleep_for = max(0.0, cfg.interval_seconds - elapsed)

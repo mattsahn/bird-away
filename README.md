@@ -96,6 +96,12 @@ The clone path above (`/home/pi/git/bird-away`) matches the paths baked into
   older than this many days. Sweep runs at startup and hourly thereafter.
   Default `7`. Set to `0` (or negative) to keep everything. R2 objects are
   unaffected — manage their lifecycle in the bucket settings.
+- `healthcheck_url` / `healthcheck_interval_seconds` — liveness ping to
+  [healthchecks.io](https://healthchecks.io) (or any URL accepting a GET).
+  Pinged after each successful loop iteration, rate-limited to once per
+  interval (default `300s`). Pings stop if the loop hangs or throws every
+  iteration, so healthchecks.io alerts you by email/SMS. Leave blank to
+  disable. Recommended for unattended deployments.
 - `log_level` — `INFO` or `DEBUG`.
 - R2 publishing keys (`r2_enabled`, `r2_account_id`, `r2_bucket`,
   `r2_public_base_url`, `r2_key_prefix`) — see

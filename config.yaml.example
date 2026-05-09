@@ -69,4 +69,13 @@ r2_bucket: ""               # bucket name, e.g. bird-away
 r2_public_base_url: ""      # e.g. https://pub-<hash>.r2.dev
 r2_key_prefix: events       # objects land at <prefix>/YYYY-MM-DD/<file>
 
+# Liveness ping to healthchecks.io (or any URL that accepts a GET). The
+# service pings this URL after each successful loop iteration, rate-limited
+# to once per healthcheck_interval_seconds. If the loop hangs or every
+# iteration throws, pings stop and healthchecks.io alerts you. Sign up at
+# https://healthchecks.io (free tier is fine), create a check, paste the
+# unique ping URL here. Leave blank to disable.
+healthcheck_url: ""
+healthcheck_interval_seconds: 300
+
 log_level: INFO

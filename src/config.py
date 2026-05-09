@@ -36,6 +36,8 @@ class Config:
     trigger_button_enabled: bool
     trigger_button_pin: int
     retention_days: int
+    healthcheck_url: str
+    healthcheck_interval_seconds: int
 
 
 DEFAULTS = {
@@ -68,6 +70,8 @@ DEFAULTS = {
     "trigger_button_enabled": True,
     "trigger_button_pin": 23,
     "retention_days": 7,
+    "healthcheck_url": "",
+    "healthcheck_interval_seconds": 300,
 }
 
 
@@ -126,4 +130,6 @@ def load_config(yaml_path: Path | str = "config.yaml") -> Config:
         trigger_button_enabled=bool(merged["trigger_button_enabled"]),
         trigger_button_pin=int(merged["trigger_button_pin"]),
         retention_days=int(merged["retention_days"]),
+        healthcheck_url=str(merged["healthcheck_url"]).strip(),
+        healthcheck_interval_seconds=int(merged["healthcheck_interval_seconds"]),
     )
