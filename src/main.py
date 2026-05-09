@@ -24,6 +24,9 @@ logger = logging.getLogger("bird_away")
 DAYTIME_START_HOUR = 7
 DAYTIME_END_HOUR = 19
 
+RETENTION_SWEEP_INTERVAL_S = 3600.0
+CAPTURE_GLOBS = ("detection-*.jpg", "event-*.mp4")
+
 
 class _SkipIteration(Exception):
     pass
@@ -60,6 +63,32 @@ def _safe_upload(uploader: R2Uploader, local_path: Path, key: str) -> None:
         uploader.upload_file(local_path, key)
     except Exception:
         logger.exception("r2_upload_failed key=%s", key)
+
+
+def _prune_old_captures(capture_dir: Path, retention_days: int) -> None:
+    if retention_days <= 0:
+        return
+    cutoff = time.time() - retention_days * 86400
+    removed = 0
+    freed = 0
+    for pattern in CAPTURE_GLOBS:
+        for path in capture_dir.glob(pattern):
+            try:
+                st = path.stat()
+                if st.st_mtime < cutoff:
+                    size = st.st_size
+                    path.unlink()
+                    removed += 1
+                    freed += size
+            except FileNotFoundError:
+                pass
+            except Exception:
+                logger.exception("retention_unlink_failed path=%s", path)
+    if removed:
+        logger.info(
+            "retention_swept removed=%d freed_bytes=%d retention_days=%d",
+            removed, freed, retention_days,
+        )
 
 
 def _handle_event(
@@ -107,6 +136,8 @@ def main() -> int:
     _setup_logging(cfg.log_level)
     cfg.capture_dir.mkdir(parents=True, exist_ok=True)
     logger.info("starting", extra={"capture_dir": str(cfg.capture_dir)})
+    _prune_old_captures(cfg.capture_dir, cfg.retention_days)
+    next_prune_at = time.monotonic() + RETENTION_SWEEP_INTERVAL_S
 
     stop = _Stop()
     signal.signal(signal.SIGTERM, stop.request)
@@ -164,6 +195,9 @@ def main() -> int:
         try:
             while not stop.requested:
                 iter_start = time.monotonic()
+                if iter_start >= next_prune_at:
+                    _prune_old_captures(cfg.capture_dir, cfg.retention_days)
+                    next_prune_at = time.monotonic() + RETENTION_SWEEP_INTERVAL_S
                 try:
                     if cfg.daytime_only and not _in_daytime():
                         logger.info(

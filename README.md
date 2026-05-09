@@ -92,6 +92,10 @@ The clone path above (`/home/pi/git/bird-away`) matches the paths baked into
   and ground; uses the Pi's internal pull-up. While held, the status LED
   stays solid; releasing runs the same flow as a real bird detection. Set
   `trigger_button_enabled: false` if no switch is wired.
+- `retention_days` — delete local `detection-*.jpg` / `event-*.mp4` files
+  older than this many days. Sweep runs at startup and hourly thereafter.
+  Default `7`. Set to `0` (or negative) to keep everything. R2 objects are
+  unaffected — manage their lifecycle in the bucket settings.
 - `log_level` — `INFO` or `DEBUG`.
 - R2 publishing keys (`r2_enabled`, `r2_account_id`, `r2_bucket`,
   `r2_public_base_url`, `r2_key_prefix`) — see

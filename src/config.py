@@ -35,6 +35,7 @@ class Config:
     status_led_pin: int
     trigger_button_enabled: bool
     trigger_button_pin: int
+    retention_days: int
 
 
 DEFAULTS = {
@@ -66,6 +67,7 @@ DEFAULTS = {
     "status_led_pin": 24,
     "trigger_button_enabled": True,
     "trigger_button_pin": 23,
+    "retention_days": 7,
 }
 
 
@@ -123,4 +125,5 @@ def load_config(yaml_path: Path | str = "config.yaml") -> Config:
         status_led_pin=int(merged["status_led_pin"]),
         trigger_button_enabled=bool(merged["trigger_button_enabled"]),
         trigger_button_pin=int(merged["trigger_button_pin"]),
+        retention_days=int(merged["retention_days"]),
     )

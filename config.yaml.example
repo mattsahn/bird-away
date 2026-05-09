@@ -20,6 +20,13 @@ trigger_button_pin: 23
 
 capture_dir: ./captures
 
+# Local-disk retention. The service deletes detection-*.jpg / event-*.mp4
+# files older than this many days (mtime-based) once at startup and once per
+# hour while running. Set to 0 (or any value <= 0) to disable cleanup and
+# keep everything. R2 retention is handled separately via a bucket lifecycle
+# rule (see "Remote publishing" in the README).
+retention_days: 7
+
 # Any OpenRouter model with vision support works here. Examples:
 #   anthropic/claude-haiku-4.5    (default — fast + cheap)
 #   anthropic/claude-sonnet-4.5   (more accurate on edge cases)
