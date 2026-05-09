@@ -31,6 +31,10 @@ class Config:
     r2_bucket: str
     r2_public_base_url: str
     r2_key_prefix: str
+    status_led_enabled: bool
+    status_led_pin: int
+    trigger_button_enabled: bool
+    trigger_button_pin: int
 
 
 DEFAULTS = {
@@ -58,6 +62,10 @@ DEFAULTS = {
     "r2_bucket": "",
     "r2_public_base_url": "",
     "r2_key_prefix": "events",
+    "status_led_enabled": True,
+    "status_led_pin": 24,
+    "trigger_button_enabled": True,
+    "trigger_button_pin": 23,
 }
 
 
@@ -111,4 +119,8 @@ def load_config(yaml_path: Path | str = "config.yaml") -> Config:
         r2_bucket=str(merged["r2_bucket"]),
         r2_public_base_url=str(merged["r2_public_base_url"]),
         r2_key_prefix=str(merged["r2_key_prefix"]).strip("/"),
+        status_led_enabled=bool(merged["status_led_enabled"]),
+        status_led_pin=int(merged["status_led_pin"]),
+        trigger_button_enabled=bool(merged["trigger_button_enabled"]),
+        trigger_button_pin=int(merged["trigger_button_pin"]),
     )

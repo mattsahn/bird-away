@@ -15,6 +15,14 @@ from anywhere on the internet.
 - Solenoid valve on its own power supply, switched by the relay. The Pi must
   not source current to the valve directly.
 - Sprinkler aimed to spray over and around the pool when the valve opens.
+- Optional: a status LED (e.g. a panel-mount illuminated momentary switch).
+  Anode → its own GPIO pin (default `24`), cathode → ground. Heartbeat-blinks
+  while the service runs and pulses on photo / bird events.
+- Optional: a momentary switch (the contact pair on the same panel-mount
+  button) for a manual sprinkler trigger. One contact → GPIO pin (default
+  `23`), other → ground; the Pi's internal pull-up holds it HIGH at rest. The
+  status LED stays solid while held, and releasing fires the same
+  capture/spray/record/upload flow as a real bird detection.
 
 ## Install
 
@@ -74,6 +82,16 @@ The clone path above (`/home/pi/git/bird-away`) matches the paths baked into
 - `motion_enabled`, `motion_threshold`, `motion_downscale` — local frame-diff
   gate; only call the vision API when consecutive frames differ enough.
   Threshold is on a 0-255 mean per-pixel scale; `5.0` is a reasonable start.
+- `status_led_enabled` / `status_led_pin` — drive a status LED on a separate
+  GPIO pin (default `24`). Heartbeat-blinks 0.5s every 10s while the service
+  is running, blinks 1.5s on each frame capture, and rapid-blinks 5 times on a
+  positive bird detection. Set `status_led_enabled: false` if you don't have
+  the LED wired.
+- `trigger_button_enabled` / `trigger_button_pin` — manual sprinkler trigger
+  via a momentary switch on a GPIO pin (default `23`). Wired between the pin
+  and ground; uses the Pi's internal pull-up. While held, the status LED
+  stays solid; releasing runs the same flow as a real bird detection. Set
+  `trigger_button_enabled: false` if no switch is wired.
 - `log_level` — `INFO` or `DEBUG`.
 - R2 publishing keys (`r2_enabled`, `r2_account_id`, `r2_bucket`,
   `r2_public_base_url`, `r2_key_prefix`) — see
@@ -132,6 +150,8 @@ Run these one at a time to verify each piece of the chain.
 .venv/bin/python scripts/test_camera.py        # writes /tmp/bird-away-test.jpg
 .venv/bin/python scripts/test_detector.py path/to/sample.jpg   # prints yes/no
 .venv/bin/python scripts/test_sprinkler.py 1   # clicks relay for 1 second
+.venv/bin/python scripts/test_status_led.py    # runs each LED pattern in sequence
+.venv/bin/python scripts/test_trigger_button.py # press to light LED, release to log
 ```
 
 ## Comparing models

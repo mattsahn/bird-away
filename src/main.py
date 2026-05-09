@@ -4,6 +4,7 @@ import logging
 import signal
 import subprocess
 import sys
+import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -13,6 +14,8 @@ from .config import Config, load_config
 from .detector import Detector
 from .motion import MotionDetector
 from .sprinkler import Sprinkler
+from .status_led import StatusLed
+from .trigger_button import TriggerButton
 from .uploader import R2Uploader, make_uploader
 
 
@@ -124,47 +127,85 @@ def main() -> int:
     if uploader is not None:
         logger.info("r2_uploader_enabled bucket=%s prefix=%s", cfg.r2_bucket, cfg.r2_key_prefix)
 
+    handler_lock = threading.Lock()
+
     with Camera(cfg.rtsp_url) as cam, Sprinkler(
         cfg.gpio_pin, active_high=cfg.relay_active_high
-    ) as sprinkler:
-        while not stop.requested:
-            iter_start = time.monotonic()
-            try:
-                if cfg.daytime_only and not _in_daytime():
-                    logger.info(
-                        "skipping_outside_daytime hour=%d window=[%d,%d)",
-                        datetime.now().hour,
-                        DAYTIME_START_HOUR,
-                        DAYTIME_END_HOUR,
-                    )
-                    raise _SkipIteration
-                frame = cam.capture_frame()
-                run_detector = True
-                if motion is not None:
-                    moved, score = motion.check(frame)
-                    run_detector = moved
-                    logger.info(
-                        "motion score=%.2f threshold=%.2f %s",
-                        score,
-                        cfg.motion_threshold,
-                        "above_threshold" if moved else "below_threshold_skip_detector",
-                    )
-                if run_detector:
-                    prepared = detector.prepare_image(frame)
-                    if detector.is_bird_present(prepared):
-                        _handle_event(cfg, cam, prepared, sprinkler, uploader=uploader)
-                    else:
-                        logger.info("detector_result=no_bird")
-            except _SkipIteration:
-                pass
-            except Exception:
-                logger.exception("loop_iteration_failed")
+    ) as sprinkler, StatusLed(
+        cfg.status_led_pin, enabled=cfg.status_led_enabled
+    ) as status_led:
 
-            elapsed = time.monotonic() - iter_start
-            sleep_for = max(0.0, cfg.interval_seconds - elapsed)
-            end = time.monotonic() + sleep_for
-            while not stop.requested and time.monotonic() < end:
-                time.sleep(min(1.0, end - time.monotonic()))
+        def on_button_press() -> None:
+            logger.info("manual_trigger_button_pressed")
+            status_led.hold()
+
+        def on_button_release() -> None:
+            logger.info("manual_trigger_button_released")
+            status_led.release()
+            if not handler_lock.acquire(blocking=False):
+                logger.info("manual_trigger_skipped event_already_running")
+                return
+            try:
+                status_led.bird_detected()
+                try:
+                    frame = cam.capture_frame()
+                    prepared = detector.prepare_image(frame)
+                    _handle_event(cfg, cam, prepared, sprinkler, uploader=uploader)
+                except Exception:
+                    logger.exception("manual_trigger_failed")
+            finally:
+                handler_lock.release()
+
+        trigger = (
+            TriggerButton(cfg.trigger_button_pin, on_button_press, on_button_release)
+            if cfg.trigger_button_enabled
+            else None
+        )
+        try:
+            while not stop.requested:
+                iter_start = time.monotonic()
+                try:
+                    if cfg.daytime_only and not _in_daytime():
+                        logger.info(
+                            "skipping_outside_daytime hour=%d window=[%d,%d)",
+                            datetime.now().hour,
+                            DAYTIME_START_HOUR,
+                            DAYTIME_END_HOUR,
+                        )
+                        raise _SkipIteration
+                    frame = cam.capture_frame()
+                    status_led.photo()
+                    run_detector = True
+                    if motion is not None:
+                        moved, score = motion.check(frame)
+                        run_detector = moved
+                        logger.info(
+                            "motion score=%.2f threshold=%.2f %s",
+                            score,
+                            cfg.motion_threshold,
+                            "above_threshold" if moved else "below_threshold_skip_detector",
+                        )
+                    if run_detector:
+                        prepared = detector.prepare_image(frame)
+                        if detector.is_bird_present(prepared):
+                            status_led.bird_detected()
+                            with handler_lock:
+                                _handle_event(cfg, cam, prepared, sprinkler, uploader=uploader)
+                        else:
+                            logger.info("detector_result=no_bird")
+                except _SkipIteration:
+                    pass
+                except Exception:
+                    logger.exception("loop_iteration_failed")
+
+                elapsed = time.monotonic() - iter_start
+                sleep_for = max(0.0, cfg.interval_seconds - elapsed)
+                end = time.monotonic() + sleep_for
+                while not stop.requested and time.monotonic() < end:
+                    time.sleep(min(1.0, end - time.monotonic()))
+        finally:
+            if trigger is not None:
+                trigger.close()
 
     logger.info("stopped")
     return 0

@@ -5,6 +5,19 @@ video_duration: 30
 gpio_pin: 17
 relay_active_high: true
 
+# Status LED on a separate GPIO pin (anode → pin, cathode → ground). The LED
+# heartbeat-blinks every 10s while the service is running, blinks 1.5s when
+# a frame is captured, and rapid-blinks 5 times on a positive bird detection.
+status_led_enabled: true
+status_led_pin: 24
+
+# Manual trigger button (momentary switch contacts → pin + ground; uses the
+# Pi's internal pull-up). While held, the status LED stays on. On release,
+# the service runs the same flow as a real bird detection: capture frame,
+# spray, record, upload.
+trigger_button_enabled: true
+trigger_button_pin: 23
+
 capture_dir: ./captures
 
 # Any OpenRouter model with vision support works here. Examples:
