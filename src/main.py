@@ -16,6 +16,7 @@ import httpx
 from .camera import Camera
 from .config import Config, load_config
 from .detector import Detector
+from .manifest import ManifestManager
 from .motion import MotionDetector
 from .sprinkler import Sprinkler
 from .status_led import StatusLed
@@ -147,6 +148,8 @@ def _handle_event(
     frame: bytes,
     sprinkler: Sprinkler,
     uploader: R2Uploader | None = None,
+    manifest: ManifestManager | None = None,
+    trigger: str = "auto",
 ) -> None:
     now = datetime.now(timezone.utc)
     ts = now.strftime("%Y%m%dT%H%M%SZ")
@@ -187,6 +190,15 @@ def _handle_event(
     if cfg.delete_after_upload and video_uploaded:
         _safe_unlink(video_path)
 
+    if manifest is not None:
+        manifest.add_event(
+            ts=ts,
+            date=date_prefix,
+            image_key=_r2_key(cfg, date_prefix, image_path),
+            video_key=_r2_key(cfg, date_prefix, video_path),
+            trigger=trigger,
+        )
+
     logger.info(
         "bird_detected_and_sprayed",
         extra={"ts": ts, "image": str(image_path), "video": str(video_path)},
@@ -223,8 +235,14 @@ def main() -> int:
         else None
     )
     uploader = make_uploader(cfg)
+    manifest: ManifestManager | None = None
     if uploader is not None:
         logger.info("r2_uploader_enabled bucket=%s prefix=%s", cfg.r2_bucket, cfg.r2_key_prefix)
+        manifest = ManifestManager(
+            uploader,
+            key_prefix=cfg.r2_key_prefix,
+            public_base_url=cfg.r2_public_base_url,
+        )
 
     handler_lock = threading.Lock()
 
@@ -249,7 +267,11 @@ def main() -> int:
                 try:
                     frame = cam.capture_frame()
                     prepared = detector.prepare_image(frame)
-                    _handle_event(cfg, cam, prepared, sprinkler, uploader=uploader)
+                    _handle_event(
+                        cfg, cam, prepared, sprinkler,
+                        uploader=uploader, manifest=manifest,
+                        trigger="manual",
+                    )
                 except Exception:
                     logger.exception("manual_trigger_failed")
             finally:
@@ -294,7 +316,10 @@ def main() -> int:
                         if detector.is_bird_present(prepared):
                             status_led.bird_detected()
                             with handler_lock:
-                                _handle_event(cfg, cam, prepared, sprinkler, uploader=uploader)
+                                _handle_event(
+                                    cfg, cam, prepared, sprinkler,
+                                    uploader=uploader, manifest=manifest,
+                                )
                         else:
                             logger.info("detector_result=no_bird")
                     iteration_ok = True

@@ -150,6 +150,61 @@ copies in `captures/` are also written and pruned by `retention_days`. To
 make R2 the only copy and stop writing to the SD card, see
 [Minimizing SD-card writes](#minimizing-sd-card-writes).
 
+## Web dashboard
+
+When R2 publishing is enabled, the service also maintains a `manifest.json`
+in the bucket (at `<r2_key_prefix>/manifest.json`). The manifest is a JSON
+index of the last 500 detection events with public URLs for each snapshot and
+video. `web/index.html` is a self-contained dashboard that reads this
+manifest and renders an interactive event timeline.
+
+### Quick start
+
+1. Make sure R2 publishing is enabled and working (see above).
+2. Open `web/index.html` in any browser — locally, or deploy it to any
+   static host (GitHub Pages, Vercel, Netlify, or even the same R2 bucket).
+3. On first load the dashboard asks for your manifest URL. Enter:
+   ```
+   https://pub-<hash>.r2.dev/<r2_key_prefix>/manifest.json
+   ```
+   (e.g. `https://pub-abc123.r2.dev/events/manifest.json` with default
+   settings). The URL is saved in `localStorage` so you only enter it once.
+
+You can also pass the URL as a query parameter to skip the prompt:
+```
+web/index.html?manifest=https://pub-abc123.r2.dev/events/manifest.json
+```
+
+### Features
+
+- **Live status**: shows connection state, last event time, event count.
+- **Event grid**: thumbnail cards for each detection with date, time, and
+  trigger type (auto / manual).
+- **Filtering**: filter by date or trigger type.
+- **Lightbox**: click any card to see the full snapshot; links to open the
+  image or play the video.
+- **Auto-refresh**: polls the manifest at a configurable interval (default
+  60 seconds).
+
+### CORS
+
+If the dashboard is served from a different origin than R2 (e.g. localhost
+or a Vercel deploy), the browser needs CORS headers on the manifest. In the
+Cloudflare dashboard, go to your R2 bucket → Settings → CORS policy and add:
+
+```json
+[
+  {
+    "AllowedOrigins": ["*"],
+    "AllowedMethods": ["GET"],
+    "AllowedHeaders": ["*"]
+  }
+]
+```
+
+R2.dev public subdomains include permissive CORS headers by default, so this
+is usually not needed unless you've customized the bucket's CORS settings.
+
 ## Run by hand
 
 ```bash
