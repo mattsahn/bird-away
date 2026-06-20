@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import json
 import logging
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
@@ -48,6 +49,22 @@ class R2Uploader:
         url = f"{self._public_base_url}/{key}" if self._public_base_url else None
         logger.info("r2_upload_ok key=%s url=%s", key, url or "(no public_base_url)")
         return url
+
+    def download_json(self, key: str) -> dict[str, Any] | None:
+        """Download and parse a JSON object from R2. Returns *None* on miss."""
+        try:
+            resp = self._client.get_object(Bucket=self._bucket, Key=key)
+            return json.loads(resp["Body"].read())
+        except ClientError as e:
+            if e.response.get("Error", {}).get("Code") in (
+                "NoSuchKey", "404", "AccessDenied",
+            ):
+                return None
+            logger.exception("r2_download_failed key=%s", key)
+            return None
+        except (BotoCoreError, json.JSONDecodeError):
+            logger.exception("r2_download_failed key=%s", key)
+            return None
 
     def upload_bytes(
         self, data: bytes, key: str, content_type: str = "application/octet-stream"

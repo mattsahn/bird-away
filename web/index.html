@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bird Away &mdash; Dashboard</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0f1117;--surface:#1a1d27;--border:#2a2d3a;
+  --text:#e4e4e7;--text-muted:#9ca3af;--accent:#3b82f6;
+  --accent-glow:rgba(59,130,246,.15);--green:#22c55e;--orange:#f59e0b;
+  --red:#ef4444;--radius:10px;
+}
+html{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  background:var(--bg);color:var(--text);line-height:1.5}
+body{min-height:100vh}
+
+/* ── header ── */
+.header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:1rem 1.5rem;border-bottom:1px solid var(--border);
+  background:var(--surface);position:sticky;top:0;z-index:50;
+}
+.header h1{font-size:1.25rem;font-weight:700;display:flex;align-items:center;gap:.5rem}
+.header h1 svg{width:28px;height:28px}
+.header-actions{display:flex;gap:.75rem;align-items:center}
+.btn{
+  padding:.45rem .9rem;border-radius:6px;border:1px solid var(--border);
+  background:var(--surface);color:var(--text);cursor:pointer;font-size:.8rem;
+  transition:background .15s;display:inline-flex;align-items:center;gap:.35rem;
+}
+.btn:hover{background:var(--border)}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn-primary:hover{background:#2563eb}
+
+/* ── status bar ── */
+.status-bar{
+  display:flex;flex-wrap:wrap;gap:1rem;padding:1rem 1.5rem;
+  border-bottom:1px solid var(--border);background:var(--surface);
+}
+.status-chip{
+  padding:.35rem .75rem;border-radius:20px;font-size:.78rem;
+  display:inline-flex;align-items:center;gap:.4rem;
+  background:rgba(255,255,255,.04);border:1px solid var(--border);
+}
+.dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.dot-green{background:var(--green)}
+.dot-orange{background:var(--orange)}
+.dot-red{background:var(--red)}
+.dot-muted{background:var(--text-muted)}
+
+/* ── toolbar ── */
+.toolbar{
+  display:flex;flex-wrap:wrap;gap:.75rem;padding:1rem 1.5rem;align-items:center;
+}
+.toolbar input[type=date]{
+  padding:.4rem .6rem;border-radius:6px;border:1px solid var(--border);
+  background:var(--surface);color:var(--text);font-size:.8rem;
+}
+.toolbar select{
+  padding:.4rem .6rem;border-radius:6px;border:1px solid var(--border);
+  background:var(--surface);color:var(--text);font-size:.8rem;
+}
+.spacer{flex:1}
+#event-count{font-size:.8rem;color:var(--text-muted)}
+
+/* ── grid ── */
+.grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
+  gap:1rem;padding:1rem 1.5rem;
+}
+.card{
+  border-radius:var(--radius);border:1px solid var(--border);
+  background:var(--surface);overflow:hidden;transition:border-color .2s,box-shadow .2s;
+  cursor:pointer;
+}
+.card:hover{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-glow)}
+.card-img{
+  width:100%;aspect-ratio:16/9;object-fit:cover;display:block;
+  background:#111;
+}
+.card-body{padding:.75rem}
+.card-date{font-size:.78rem;color:var(--text-muted)}
+.card-time{font-size:.95rem;font-weight:600;margin-top:.15rem}
+.card-meta{
+  display:flex;align-items:center;gap:.5rem;margin-top:.4rem;font-size:.75rem;
+}
+.badge{
+  padding:.15rem .45rem;border-radius:4px;font-weight:600;text-transform:uppercase;
+  letter-spacing:.03em;
+}
+.badge-auto{background:rgba(59,130,246,.15);color:var(--accent)}
+.badge-manual{background:rgba(245,158,11,.15);color:var(--orange)}
+.video-link{
+  color:var(--accent);text-decoration:none;display:inline-flex;align-items:center;gap:.25rem;
+}
+.video-link:hover{text-decoration:underline}
+
+/* ── lightbox ── */
+.overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:100;
+  display:none;align-items:center;justify-content:center;padding:1rem;
+}
+.overlay.active{display:flex}
+.overlay-close{
+  position:absolute;top:1rem;right:1.25rem;background:none;border:none;
+  color:#fff;font-size:2rem;cursor:pointer;line-height:1;
+}
+.overlay-content{
+  max-width:960px;width:100%;background:var(--surface);border-radius:var(--radius);
+  overflow:hidden;
+}
+.overlay-content img{width:100%;display:block}
+.overlay-content video{width:100%;display:block;background:#000}
+.overlay-info{padding:1rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap}
+.overlay-info .btn{font-size:.8rem}
+
+/* ── settings modal ── */
+.modal-backdrop{
+  position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;
+  display:none;align-items:center;justify-content:center;padding:1rem;
+}
+.modal-backdrop.active{display:flex}
+.modal{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  padding:1.5rem;max-width:480px;width:100%;
+}
+.modal h2{font-size:1.1rem;margin-bottom:1rem}
+.modal label{display:block;font-size:.82rem;color:var(--text-muted);margin-bottom:.3rem}
+.modal input[type=text]{
+  width:100%;padding:.5rem .7rem;border-radius:6px;border:1px solid var(--border);
+  background:var(--bg);color:var(--text);font-size:.85rem;margin-bottom:1rem;
+}
+.modal-actions{display:flex;gap:.5rem;justify-content:flex-end}
+
+/* ── empty state ── */
+.empty{
+  text-align:center;padding:4rem 1rem;color:var(--text-muted);
+}
+.empty svg{width:64px;height:64px;margin-bottom:1rem;opacity:.4}
+.empty h3{font-size:1.1rem;margin-bottom:.5rem;color:var(--text)}
+.empty p{font-size:.85rem;max-width:400px;margin:0 auto}
+
+/* ── loading ── */
+.loader{text-align:center;padding:3rem;color:var(--text-muted);font-size:.9rem}
+
+/* ── responsive ── */
+@media(max-width:600px){
+  .header{padding:.75rem 1rem}
+  .grid{grid-template-columns:1fr;padding:.75rem}
+  .toolbar{padding:.75rem 1rem}
+  .status-bar{padding:.75rem 1rem}
+}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="header">
+  <h1>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+         stroke-linecap="round" stroke-linejoin="round">
+      <path d="M16 7h.01"/><path d="M3.4 18H12a8 8 0 0 0 8-8V7a4 4 0 0 0-7.28-2.3L2 20"/>
+      <path d="m20 7 2 .5-2 .5"/><path d="M10 18v3"/><path d="M14 17.75V21"/>
+    </svg>
+    Bird Away
+  </h1>
+  <div class="header-actions">
+    <button class="btn" id="refresh-btn" title="Refresh now">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+        <polyline points="21 3 21 9 15 9"/>
+      </svg>
+      Refresh
+    </button>
+    <button class="btn" id="settings-btn" title="Settings">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72
+        12.72 1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+      </svg>
+    </button>
+  </div>
+</header>
+
+<!-- Status bar -->
+<div class="status-bar" id="status-bar">
+  <span class="status-chip"><span class="dot dot-muted"></span> Connecting&hellip;</span>
+</div>
+
+<!-- Toolbar -->
+<div class="toolbar">
+  <input type="date" id="filter-date" title="Filter by date">
+  <select id="filter-trigger" title="Filter by trigger">
+    <option value="">All triggers</option>
+    <option value="auto">Auto only</option>
+    <option value="manual">Manual only</option>
+  </select>
+  <span class="spacer"></span>
+  <span id="event-count"></span>
+</div>
+
+<!-- Event grid -->
+<div id="grid" class="grid"></div>
+
+<!-- Lightbox overlay -->
+<div class="overlay" id="lightbox">
+  <button class="overlay-close" id="lightbox-close">&times;</button>
+  <div class="overlay-content" id="lightbox-content"></div>
+</div>
+
+<!-- Settings modal -->
+<div class="modal-backdrop" id="settings-modal">
+  <div class="modal">
+    <h2>Dashboard Settings</h2>
+    <label for="input-manifest-url">Manifest URL</label>
+    <input type="text" id="input-manifest-url"
+           placeholder="https://pub-xxx.r2.dev/events/manifest.json">
+    <p style="font-size:.75rem;color:var(--text-muted);margin:-0.6rem 0 1rem">
+      The full public URL to the <code>manifest.json</code> file in your R2 bucket.
+      The bird-away service generates this automatically when R2 publishing is enabled.
+    </p>
+    <label for="input-refresh">Auto-refresh interval (seconds)</label>
+    <input type="text" id="input-refresh" placeholder="60">
+    <div class="modal-actions">
+      <button class="btn" id="settings-cancel">Cancel</button>
+      <button class="btn btn-primary" id="settings-save">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ── State ── */
+const STORAGE_KEY = "bird-away-dashboard";
+let state = {
+  manifestUrl: "",
+  refreshInterval: 60,
+  events: [],
+  lastUpdated: null,
+  loading: false,
+  error: null,
+};
+let refreshTimer = null;
+
+function loadSettings() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const s = JSON.parse(raw);
+      if (s.manifestUrl) state.manifestUrl = s.manifestUrl;
+      if (s.refreshInterval) state.refreshInterval = Math.max(10, s.refreshInterval);
+    }
+  } catch {}
+  // Query param override
+  const params = new URLSearchParams(location.search);
+  const urlParam = params.get("manifest") || params.get("url");
+  if (urlParam) state.manifestUrl = urlParam;
+}
+
+function saveSettings() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({
+    manifestUrl: state.manifestUrl,
+    refreshInterval: state.refreshInterval,
+  }));
+}
+
+/* ── Data fetching ── */
+async function fetchManifest() {
+  if (!state.manifestUrl) {
+    state.error = "no_url";
+    render();
+    return;
+  }
+  state.loading = true;
+  state.error = null;
+  render();
+  try {
+    const resp = await fetch(state.manifestUrl, { cache: "no-store" });
+    if (!resp.ok) throw new Error("HTTP " + resp.status);
+    const data = await resp.json();
+    state.events = data.events || [];
+    state.lastUpdated = data.last_updated || null;
+    state.error = null;
+  } catch (e) {
+    state.error = e.message || "fetch_failed";
+  }
+  state.loading = false;
+  render();
+}
+
+function scheduleRefresh() {
+  clearInterval(refreshTimer);
+  if (state.manifestUrl && state.refreshInterval > 0) {
+    refreshTimer = setInterval(fetchManifest, state.refreshInterval * 1000);
+  }
+}
+
+/* ── Rendering ── */
+function render() {
+  renderStatus();
+  renderGrid();
+}
+
+function renderStatus() {
+  const bar = document.getElementById("status-bar");
+  const chips = [];
+  if (state.loading) {
+    chips.push('<span class="status-chip"><span class="dot dot-orange"></span> Loading&hellip;</span>');
+  } else if (state.error === "no_url") {
+    chips.push('<span class="status-chip"><span class="dot dot-red"></span> No manifest URL configured &mdash; click Settings</span>');
+  } else if (state.error) {
+    chips.push('<span class="status-chip"><span class="dot dot-red"></span> Error: ' + esc(state.error) + '</span>');
+  } else {
+    chips.push('<span class="status-chip"><span class="dot dot-green"></span> Connected</span>');
+  }
+  if (state.lastUpdated) {
+    chips.push('<span class="status-chip">Last event: ' + formatTimestamp(state.lastUpdated) + '</span>');
+  }
+  chips.push('<span class="status-chip">Events: ' + state.events.length + '</span>');
+  if (state.refreshInterval > 0 && state.manifestUrl) {
+    chips.push('<span class="status-chip">Auto-refresh: ' + state.refreshInterval + 's</span>');
+  }
+  bar.innerHTML = chips.join("");
+}
+
+function getFilteredEvents() {
+  let filtered = state.events;
+  const dateVal = document.getElementById("filter-date").value;
+  const triggerVal = document.getElementById("filter-trigger").value;
+  if (dateVal) {
+    filtered = filtered.filter(e => e.date === dateVal);
+  }
+  if (triggerVal) {
+    filtered = filtered.filter(e => e.trigger === triggerVal);
+  }
+  return filtered;
+}
+
+function renderGrid() {
+  const grid = document.getElementById("grid");
+  const filtered = getFilteredEvents();
+  document.getElementById("event-count").textContent =
+    filtered.length === state.events.length
+      ? filtered.length + " events"
+      : filtered.length + " of " + state.events.length + " events";
+
+  if (!state.manifestUrl && !state.loading) {
+    grid.innerHTML = emptyState(
+      "Configure your manifest URL",
+      "Click the settings button in the header to enter your R2 manifest URL. " +
+      "The bird-away service creates this file automatically when R2 publishing is enabled."
+    );
+    return;
+  }
+  if (state.loading && state.events.length === 0) {
+    grid.innerHTML = '<div class="loader">Loading events&hellip;</div>';
+    return;
+  }
+  if (filtered.length === 0) {
+    grid.innerHTML = emptyState(
+      "No events found",
+      state.events.length > 0
+        ? "Try adjusting the filters above."
+        : "The device hasn't recorded any detection events yet."
+    );
+    return;
+  }
+
+  grid.innerHTML = filtered.map(ev => {
+    const dt = parseTs(ev.ts);
+    return '<div class="card" data-ts="' + esc(ev.ts) + '">' +
+      '<img class="card-img" src="' + esc(ev.image_url) + '" alt="Detection ' + esc(ev.ts) + '" loading="lazy" onerror="this.style.display=\'none\'">' +
+      '<div class="card-body">' +
+        '<div class="card-date">' + esc(ev.date) + '</div>' +
+        '<div class="card-time">' + (dt ? formatTime(dt) : esc(ev.ts)) + '</div>' +
+        '<div class="card-meta">' +
+          '<span class="badge badge-' + esc(ev.trigger || "auto") + '">' + esc(ev.trigger || "auto") + '</span>' +
+          '<a class="video-link" href="' + esc(ev.video_url) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()">' +
+            '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>' +
+            'Video' +
+          '</a>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }).join("");
+}
+
+function emptyState(title, desc) {
+  return '<div class="empty" style="grid-column:1/-1">' +
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">' +
+      '<path d="M16 7h.01"/><path d="M3.4 18H12a8 8 0 0 0 8-8V7a4 4 0 0 0-7.28-2.3L2 20"/>' +
+      '<path d="m20 7 2 .5-2 .5"/><path d="M10 18v3"/><path d="M14 17.75V21"/>' +
+    '</svg>' +
+    '<h3>' + title + '</h3>' +
+    '<p>' + desc + '</p>' +
+  '</div>';
+}
+
+/* ── Lightbox ── */
+function openLightbox(ev) {
+  const box = document.getElementById("lightbox");
+  const content = document.getElementById("lightbox-content");
+  const dt = parseTs(ev.ts);
+  const timeStr = dt ? formatTime(dt) + " &mdash; " + ev.date : ev.ts;
+
+  content.innerHTML =
+    '<img src="' + esc(ev.image_url) + '" alt="Detection">' +
+    '<div class="overlay-info">' +
+      '<span style="font-weight:600">' + timeStr + '</span>' +
+      '<span class="badge badge-' + esc(ev.trigger || "auto") + '">' + esc(ev.trigger || "auto") + '</span>' +
+      '<span class="spacer"></span>' +
+      '<a class="btn" href="' + esc(ev.image_url) + '" target="_blank" rel="noopener">Open image</a>' +
+      '<a class="btn btn-primary" href="' + esc(ev.video_url) + '" target="_blank" rel="noopener">' +
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>' +
+        'Play video' +
+      '</a>' +
+    '</div>';
+  box.classList.add("active");
+}
+
+function closeLightbox() {
+  document.getElementById("lightbox").classList.remove("active");
+  document.getElementById("lightbox-content").innerHTML = "";
+}
+
+/* ── Helpers ── */
+function esc(s) {
+  if (!s) return "";
+  const d = document.createElement("div");
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function parseTs(ts) {
+  // "20260426T131922Z" -> Date
+  if (!ts || ts.length < 15) return null;
+  const iso = ts.slice(0,4) + "-" + ts.slice(4,6) + "-" + ts.slice(6,8) + "T" +
+              ts.slice(9,11) + ":" + ts.slice(11,13) + ":" + ts.slice(13,15) + "Z";
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function formatTime(d) {
+  return d.toLocaleTimeString(undefined, { hour:"2-digit", minute:"2-digit", second:"2-digit" });
+}
+
+function formatTimestamp(iso) {
+  try {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return iso;
+    const ago = Math.round((Date.now() - d.getTime()) / 1000);
+    if (ago < 60) return ago + "s ago";
+    if (ago < 3600) return Math.round(ago / 60) + "m ago";
+    if (ago < 86400) return Math.round(ago / 3600) + "h ago";
+    return d.toLocaleDateString() + " " + d.toLocaleTimeString();
+  } catch { return iso; }
+}
+
+/* ── Event handlers ── */
+document.getElementById("refresh-btn").addEventListener("click", fetchManifest);
+
+document.getElementById("settings-btn").addEventListener("click", function() {
+  document.getElementById("input-manifest-url").value = state.manifestUrl;
+  document.getElementById("input-refresh").value = state.refreshInterval;
+  document.getElementById("settings-modal").classList.add("active");
+});
+
+document.getElementById("settings-cancel").addEventListener("click", function() {
+  document.getElementById("settings-modal").classList.remove("active");
+});
+
+document.getElementById("settings-save").addEventListener("click", function() {
+  state.manifestUrl = document.getElementById("input-manifest-url").value.trim();
+  const iv = parseInt(document.getElementById("input-refresh").value, 10);
+  state.refreshInterval = isNaN(iv) || iv < 10 ? 60 : iv;
+  saveSettings();
+  document.getElementById("settings-modal").classList.remove("active");
+  fetchManifest();
+  scheduleRefresh();
+});
+
+document.getElementById("grid").addEventListener("click", function(e) {
+  const card = e.target.closest(".card");
+  if (!card) return;
+  const ts = card.dataset.ts;
+  const ev = state.events.find(function(x) { return x.ts === ts; });
+  if (ev) openLightbox(ev);
+});
+
+document.getElementById("lightbox-close").addEventListener("click", closeLightbox);
+document.getElementById("lightbox").addEventListener("click", function(e) {
+  if (e.target === this) closeLightbox();
+});
+document.addEventListener("keydown", function(e) {
+  if (e.key === "Escape") {
+    closeLightbox();
+    document.getElementById("settings-modal").classList.remove("active");
+  }
+});
+
+document.getElementById("filter-date").addEventListener("change", renderGrid);
+document.getElementById("filter-trigger").addEventListener("change", renderGrid);
+
+/* ── Init ── */
+loadSettings();
+fetchManifest();
+scheduleRefresh();
+
+})();
+</script>
+</body>
+</html>
