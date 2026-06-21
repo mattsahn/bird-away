@@ -1,0 +1,6 @@
+{
+  "buildCommand": "node -e \"const fs=require('fs'); const u=process.env.MANIFEST_URL||''; fs.writeFileSync('dashboard-config.json',JSON.stringify({manifest_url:u}))\"",
+  "installCommand": null,
+  "framework": null,
+  "outputDirectory": "."
+}

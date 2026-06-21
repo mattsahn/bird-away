@@ -11,3 +11,7 @@ scripts/models_config.yaml
 captures/
 *.log
 .DS_Store
+
+web/.vercel/
+web/.env.local
+web/dashboard-config.json

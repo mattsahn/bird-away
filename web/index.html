@@ -507,10 +507,26 @@ document.addEventListener("keydown", function(e) {
 document.getElementById("filter-date").addEventListener("change", renderGrid);
 document.getElementById("filter-trigger").addEventListener("change", renderGrid);
 
+/* ── Auto-detect config ── */
+async function autoDetect() {
+  if (state.manifestUrl) return;
+  if (location.protocol === "file:") return;
+  try {
+    var resp = await fetch("dashboard-config.json", { cache: "no-store" });
+    if (resp.ok) {
+      var config = await resp.json();
+      if (config.manifest_url) state.manifestUrl = config.manifest_url;
+    }
+  } catch (_) {}
+}
+
 /* ── Init ── */
-loadSettings();
-fetchManifest();
-scheduleRefresh();
+(async function init() {
+  loadSettings();
+  await autoDetect();
+  fetchManifest();
+  scheduleRefresh();
+})();
 
 })();
 </script>
