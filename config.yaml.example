@@ -3,7 +3,7 @@ spray_duration: 3
 
 # Recording timeline per event: record pre_spray_seconds of video, fire the
 # spray for spray_duration, then keep recording for post_spray_seconds. Total
-# clip length = pre_spray_seconds + post_spray_seconds.
+# clip length = pre_spray_seconds + spray_duration + post_spray_seconds.
 pre_spray_seconds: 3
 post_spray_seconds: 4
 

@@ -17,8 +17,8 @@ RestartSec=10
 # seconds. The loop pings at the top of each iteration and once per second
 # during sleep, so 120s comfortably covers normal event handling (camera
 # reconnect ~40s + detector API ~30s + recording wait
-# (pre_spray_seconds + post_spray_seconds)+10s).
-# Bump this if you raise pre_spray_seconds/post_spray_seconds significantly.
+# (pre_spray_seconds + spray_duration + post_spray_seconds)+10s).
+# Bump this if you raise spray_duration/pre_spray_seconds/post_spray_seconds significantly.
 WatchdogSec=120
 StandardOutput=journal
 StandardError=journal

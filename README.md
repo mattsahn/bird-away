@@ -68,7 +68,7 @@ The clone path above (`/home/pi/git/bird-away`) matches the paths baked into
 - `pre_spray_seconds` — seconds of video recorded before the spray fires, so
   the clip captures the moment leading up to it (default `3`).
 - `post_spray_seconds` — seconds of video recorded after the spray fires
-  (default `4`). Total clip length is `pre_spray_seconds + post_spray_seconds`.
+  (default `4`). Total clip length is `pre_spray_seconds + spray_duration + post_spray_seconds`.
 - `gpio_pin` — BCM pin number wired to the relay input (default `17`).
 - `relay_active_high` — `true` if the relay closes on logic-high, `false` if
   active-low (most cheap relay modules are active-low — check yours).
