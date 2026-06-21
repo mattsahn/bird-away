@@ -158,22 +158,38 @@ index of the last 500 detection events with public URLs for each snapshot and
 video. `web/index.html` is a self-contained dashboard that reads this
 manifest and renders an interactive event timeline.
 
-### Quick start
+### Deploying to Vercel
 
-1. Make sure R2 publishing is enabled and working (see above).
-2. Open `web/index.html` in any browser — locally, or deploy it to any
-   static host (GitHub Pages, Vercel, Netlify, or even the same R2 bucket).
-3. On first load the dashboard asks for your manifest URL. Enter:
-   ```
-   https://pub-<hash>.r2.dev/<r2_key_prefix>/manifest.json
-   ```
-   (e.g. `https://pub-abc123.r2.dev/events/manifest.json` with default
-   settings). The URL is saved in `localStorage` so you only enter it once.
+The dashboard is a static site — deploy the `web/` directory to Vercel:
 
-You can also pass the URL as a query parameter to skip the prompt:
+```bash
+cd web
+npx vercel --prod
 ```
-web/index.html?manifest=https://pub-abc123.r2.dev/events/manifest.json
+
+On first load, click the settings icon and enter your manifest URL:
 ```
+https://pub-<hash>.r2.dev/<r2_key_prefix>/manifest.json
+```
+(e.g. `https://pub-abc123.r2.dev/events/manifest.json` with default
+settings). The URL is saved in `localStorage` so you only enter it once.
+
+You can also pass the URL as a query parameter:
+```
+https://your-vercel-app.vercel.app?manifest=https://pub-abc123.r2.dev/events/manifest.json
+```
+
+To redeploy after making changes:
+```bash
+cd web
+npx vercel --prod
+```
+
+### Other hosting options
+
+The dashboard is a single `index.html` with no build step, so it works
+anywhere: open it locally as a file, deploy to GitHub Pages or Netlify,
+or upload it to the same R2 bucket as your events.
 
 ### Features
 
