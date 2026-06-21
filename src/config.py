@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -96,6 +97,13 @@ def load_config(yaml_path: Path | str = "config.yaml") -> Config:
             data = yaml.safe_load(f) or {}
 
     merged = {**DEFAULTS, **data}
+
+    if "video_duration" in data:
+        logging.getLogger("bird_away").warning(
+            "config.yaml contains 'video_duration' which is no longer used. "
+            "Replace it with 'pre_spray_seconds' and 'post_spray_seconds'. "
+            "See config.yaml.example for details."
+        )
 
     if bool(merged["r2_enabled"]):
         missing = [
