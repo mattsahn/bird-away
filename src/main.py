@@ -168,8 +168,9 @@ def _handle_event(
         if uploader is not None:
             _safe_upload(uploader, image_path, _r2_key(cfg, date_prefix, image_path))
 
-    total_duration = cfg.pre_spray_seconds + cfg.post_spray_seconds
+    total_duration = cfg.pre_spray_seconds + cfg.spray_duration + cfg.post_spray_seconds
     rec = cam.start_recording(video_path, total_duration)
+
     try:
         try:
             # Record a pre-roll so the clip captures the moment before the
