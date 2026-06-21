@@ -167,23 +167,22 @@ cd web
 npx vercel --prod
 ```
 
-On first load, click the settings icon and enter your manifest URL:
-```
-https://pub-<hash>.r2.dev/<r2_key_prefix>/manifest.json
-```
-(e.g. `https://pub-abc123.r2.dev/events/manifest.json` with default
-settings). The URL is saved in `localStorage` so you only enter it once.
+Set the `MANIFEST_URL` environment variable on the Vercel project so
+visitors see data immediately without any manual configuration:
 
-You can also pass the URL as a query parameter:
-```
-https://your-vercel-app.vercel.app?manifest=https://pub-abc123.r2.dev/events/manifest.json
-```
-
-To redeploy after making changes:
 ```bash
 cd web
-npx vercel --prod
+npx vercel env add MANIFEST_URL production
+# paste: https://pub-<hash>.r2.dev/events/manifest.json
+npx vercel --prod        # redeploy to pick up the new env var
 ```
+
+Or set it in the Vercel dashboard under Project → Settings → Environment
+Variables. The build step writes this value into `dashboard-config.json`,
+which the dashboard loads automatically on startup.
+
+Visitors can still override the URL via the settings modal or the
+`?manifest=` query parameter.
 
 ### Other hosting options
 

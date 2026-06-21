@@ -14,3 +14,4 @@ captures/
 
 web/.vercel/
 web/.env.local
+web/dashboard-config.json
