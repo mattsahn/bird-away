@@ -168,13 +168,18 @@ def _handle_event(
         if uploader is not None:
             _safe_upload(uploader, image_path, _r2_key(cfg, date_prefix, image_path))
 
-    rec = cam.start_recording(video_path, cfg.video_duration)
+    total_duration = cfg.pre_spray_seconds + cfg.post_spray_seconds
+    rec = cam.start_recording(video_path, total_duration)
     try:
         try:
+            # Record a pre-roll so the clip captures the moment before the
+            # deterrent fires, then trigger the spray while recording continues.
+            if cfg.pre_spray_seconds > 0:
+                time.sleep(cfg.pre_spray_seconds)
             sprinkler.fire(cfg.spray_duration)
         finally:
             try:
-                rec.wait(timeout=cfg.video_duration + 10)
+                rec.wait(timeout=total_duration + 10)
             except subprocess.TimeoutExpired:
                 logger.warning("video_recording_timeout, killing ffmpeg")
                 rec.kill()

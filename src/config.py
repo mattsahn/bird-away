@@ -14,7 +14,8 @@ class Config:
     rtsp_url: str
     interval_seconds: int
     spray_duration: float
-    video_duration: int
+    pre_spray_seconds: float
+    post_spray_seconds: float
     gpio_pin: int
     relay_active_high: bool
     capture_dir: Path
@@ -44,7 +45,8 @@ class Config:
 DEFAULTS = {
     "interval_seconds": 60,
     "spray_duration": 3,
-    "video_duration": 7,
+    "pre_spray_seconds": 3,
+    "post_spray_seconds": 4,
     "gpio_pin": 17,
     "relay_active_high": True,
     "capture_dir": "./captures",
@@ -116,7 +118,8 @@ def load_config(yaml_path: Path | str = "config.yaml") -> Config:
         rtsp_url=rtsp_url,
         interval_seconds=int(merged["interval_seconds"]),
         spray_duration=float(merged["spray_duration"]),
-        video_duration=int(merged["video_duration"]),
+        pre_spray_seconds=float(merged["pre_spray_seconds"]),
+        post_spray_seconds=float(merged["post_spray_seconds"]),
         gpio_pin=int(merged["gpio_pin"]),
         relay_active_high=bool(merged["relay_active_high"]),
         capture_dir=Path(merged["capture_dir"]).expanduser().resolve(),
