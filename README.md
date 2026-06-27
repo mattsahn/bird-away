@@ -71,7 +71,10 @@ The clone path above (`/home/pi/git/bird-away`) matches the paths baked into
 
 - `interval_seconds` — how often to sample (default `60`).
 - `spray_duration` — relay-on time in seconds when a bird is seen (default `3`).
-- `video_duration` — clip length in seconds saved per event (default `7`).
+- `pre_spray_seconds` — seconds of video recorded before the spray fires, so
+  the clip captures the moment leading up to it (default `3`).
+- `post_spray_seconds` — seconds of video recorded after the spray fires
+  (default `4`). Total clip length is `pre_spray_seconds + spray_duration + post_spray_seconds`.
 - `gpio_pin` — BCM pin number wired to the relay input (default `17`).
 - `relay_active_high` — `true` if the relay closes on logic-high, `false` if
   active-low (most cheap relay modules are active-low — check yours).

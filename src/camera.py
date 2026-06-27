@@ -123,7 +123,7 @@ class Camera:
     def start_recording(
         self,
         output_path: Path,
-        duration_s: int,
+        duration_s: float,
     ) -> subprocess.Popen:
         """Stop the persistent decode and spawn ffmpeg to record MP4.
 
