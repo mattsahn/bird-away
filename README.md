@@ -6,6 +6,8 @@ to startle them. Each detection saves a still image and a short video clip,
 and can optionally publish both to a Cloudflare R2 bucket so they're viewable
 from anywhere on the internet.
 
+blogpost: https://mattsahn.github.io/bird-away-blog/
+
 <img width="400" height="225" alt="event-20260622T192023Z" src="https://github.com/user-attachments/assets/2fb09415-a968-4a3c-9c0a-fbbbb147f2fd" />
 
 ## Hardware
