@@ -1,4 +1,4 @@
-# bird-away
+<img width="300" alt="image" src="https://github.com/user-attachments/assets/51d76a95-e8b6-47e1-b92c-d38c6e815195" />
 
 A Raspberry Pi service that watches a pool through an RTSP camera, asks Claude
 whether birds are present, and triggers a sprinkler (via relay + solenoid valve)
