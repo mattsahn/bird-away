@@ -23,6 +23,10 @@ from anywhere on the internet.
   status LED stays solid while held, and releasing fires the same
   capture/spray/record/upload flow as a real bird detection.
 
+<img width="250" alt="image" src="https://github.com/user-attachments/assets/63336784-0bd0-4567-83ed-71b2f77b96e4" /> <img width="200" alt="image" src="https://github.com/user-attachments/assets/fb4cb09c-7633-4d01-89f5-0a0e8c217455" /> <img width="300" alt="image" src="https://github.com/user-attachments/assets/7113ca67-c01e-44e7-818b-d237dc5282a3" />
+
+
+
 
 ## Install
 
