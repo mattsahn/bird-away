@@ -7,7 +7,7 @@ and can optionally publish both to a Cloudflare R2 bucket so they're viewable
 from anywhere on the internet.
 
 ## Hardware
-<img width="1113" height="148" alt="image" src="https://github.com/user-attachments/assets/7b86f38a-a13e-4db1-9125-c2ba52aa548f" />
+<img width="1110" height="161" alt="image" src="https://github.com/user-attachments/assets/c858b5ad-f7e6-4a01-8866-c37de9c4c621" />
 
 - Raspberry Pi 4 (or earlier) on Wi-Fi.
 - Relay module wired to one Pi GPIO pin and ground. Active-high or active-low
