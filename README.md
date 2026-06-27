@@ -7,22 +7,22 @@ and can optionally publish both to a Cloudflare R2 bucket so they're viewable
 from anywhere on the internet.
 
 ## Hardware
+<img width="1113" height="148" alt="image" src="https://github.com/user-attachments/assets/7b86f38a-a13e-4db1-9125-c2ba52aa548f" />
 
 - Raspberry Pi 4 (or earlier) on Wi-Fi.
-- RTSP-capable IP camera reachable on the same network.
 - Relay module wired to one Pi GPIO pin and ground. Active-high or active-low
   is configurable.
+- RTSP-capable IP camera reachable on the same network.
 - Solenoid valve on its own power supply, switched by the relay. The Pi must
   not source current to the valve directly.
 - Sprinkler aimed to spray over and around the pool when the valve opens.
-- Optional: a status LED (e.g. a panel-mount illuminated momentary switch).
-  Anode → its own GPIO pin (default `24`), cathode → ground. Heartbeat-blinks
-  while the service runs and pulses on photo / bird events.
-- Optional: a momentary switch (the contact pair on the same panel-mount
+- optional - temperature/humidity sensor for monitoring ambient conditions in the enclosure
+- Momentary switch (the contact pair on the same panel-mount
   button) for a manual sprinkler trigger. One contact → GPIO pin (default
   `23`), other → ground; the Pi's internal pull-up holds it HIGH at rest. The
   status LED stays solid while held, and releasing fires the same
   capture/spray/record/upload flow as a real bird detection.
+
 
 ## Install
 
