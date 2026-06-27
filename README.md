@@ -155,6 +155,7 @@ make R2 the only copy and stop writing to the SD card, see
 [Minimizing SD-card writes](#minimizing-sd-card-writes).
 
 ## Web dashboard
+<img width="550" alt="image" src="https://github.com/user-attachments/assets/b501166a-2edc-4928-a1f7-470b0a64b1cd" />
 
 When R2 publishing is enabled, the service also maintains a `manifest.json`
 in the bucket (at `<r2_key_prefix>/manifest.json`). The manifest is a JSON
