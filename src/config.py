@@ -41,6 +41,10 @@ class Config:
     healthcheck_url: str
     healthcheck_interval_seconds: int
     delete_after_upload: bool
+    realtime_enabled: bool
+    realtime_key_prefix: str
+    realtime_window_minutes: int
+    realtime_max_image_dim: int
 
 
 DEFAULTS = {
@@ -77,6 +81,10 @@ DEFAULTS = {
     "healthcheck_url": "",
     "healthcheck_interval_seconds": 300,
     "delete_after_upload": False,
+    "realtime_enabled": False,
+    "realtime_key_prefix": "realtime",
+    "realtime_window_minutes": 30,
+    "realtime_max_image_dim": 0,
 }
 
 
@@ -121,6 +129,12 @@ def load_config(yaml_path: Path | str = "config.yaml") -> Config:
             "would be deleted with no remote copy)"
         )
 
+    if bool(merged["realtime_enabled"]) and not bool(merged["r2_enabled"]):
+        raise RuntimeError(
+            "realtime_enabled requires r2_enabled: true (real-time frames are "
+            "uploaded straight to R2 with no local copy)"
+        )
+
     return Config(
         openrouter_api_key=api_key,
         rtsp_url=rtsp_url,
@@ -152,4 +166,8 @@ def load_config(yaml_path: Path | str = "config.yaml") -> Config:
         healthcheck_url=str(merged["healthcheck_url"]).strip(),
         healthcheck_interval_seconds=int(merged["healthcheck_interval_seconds"]),
         delete_after_upload=bool(merged["delete_after_upload"]),
+        realtime_enabled=bool(merged["realtime_enabled"]),
+        realtime_key_prefix=str(merged["realtime_key_prefix"]).strip("/"),
+        realtime_window_minutes=int(merged["realtime_window_minutes"]),
+        realtime_max_image_dim=int(merged["realtime_max_image_dim"]),
     )

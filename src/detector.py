@@ -11,6 +11,23 @@ from PIL import Image
 logger = logging.getLogger(__name__)
 
 
+def downscale_jpeg(image_bytes: bytes, max_dim: int, quality: int = 80) -> bytes:
+    """Downscale a JPEG so its longer edge is at most ``max_dim`` pixels.
+
+    Returns the input unchanged when ``max_dim <= 0`` or the image already
+    fits. Re-encodes as JPEG at ``quality`` otherwise.
+    """
+    if max_dim <= 0:
+        return image_bytes
+    img = Image.open(io.BytesIO(image_bytes))
+    if max(img.size) <= max_dim:
+        return image_bytes
+    img.thumbnail((max_dim, max_dim))
+    buf = io.BytesIO()
+    img.convert("RGB").save(buf, format="JPEG", quality=quality)
+    return buf.getvalue()
+
+
 class Detector:
     def __init__(
         self,
@@ -33,19 +50,12 @@ class Detector:
         Downscales to max_image_dim on the longer edge if the input is
         larger; otherwise returns the input unchanged.
         """
-        if self._max_image_dim <= 0:
-            return image_bytes
-        img = Image.open(io.BytesIO(image_bytes))
-        if max(img.size) <= self._max_image_dim:
-            return image_bytes
-        img.thumbnail((self._max_image_dim, self._max_image_dim))
-        buf = io.BytesIO()
-        img.convert("RGB").save(buf, format="JPEG", quality=self._jpeg_quality)
-        out = buf.getvalue()
-        logger.info(
-            "detector_image_prepared size_in=%dB size_out=%dB",
-            len(image_bytes), len(out),
-        )
+        out = downscale_jpeg(image_bytes, self._max_image_dim, self._jpeg_quality)
+        if out is not image_bytes:
+            logger.info(
+                "detector_image_prepared size_in=%dB size_out=%dB",
+                len(image_bytes), len(out),
+            )
         return out
 
     def is_bird_present(self, image_bytes: bytes) -> bool:

@@ -15,8 +15,8 @@ import httpx
 
 from .camera import Camera
 from .config import Config, load_config
-from .detector import Detector
-from .manifest import ManifestManager
+from .detector import Detector, downscale_jpeg
+from .manifest import ManifestManager, RealtimeManifest
 from .motion import MotionDetector
 from .sprinkler import Sprinkler
 from .status_led import StatusLed
@@ -81,6 +81,34 @@ def _safe_upload_bytes(
     except Exception:
         logger.exception("r2_upload_failed key=%s", key)
         return False
+
+
+def _upload_realtime(
+    cfg: Config,
+    uploader: R2Uploader,
+    rt_manifest: RealtimeManifest,
+    frame: bytes,
+    detected: bool,
+    status: str,
+) -> None:
+    """Upload one periodic frame to the real-time prefix and index it.
+
+    Pushed straight from memory (never written to disk) so it doesn't touch
+    capture_dir or local retention. Failures are logged but never raised — a
+    real-time hiccup must not break the detection loop.
+    """
+    try:
+        now = datetime.now(timezone.utc)
+        ts = now.strftime("%Y%m%dT%H%M%SZ")
+        date_prefix = now.strftime("%Y-%m-%d")
+        img = downscale_jpeg(frame, cfg.realtime_max_image_dim)
+        key = f"{cfg.realtime_key_prefix}/frames/{ts}.jpg"
+        _safe_upload_bytes(uploader, img, key, "image/jpeg")
+        rt_manifest.add_frame(
+            ts=ts, date=date_prefix, image_key=key, detected=detected, status=status,
+        )
+    except Exception:
+        logger.exception("realtime_upload_failed")
 
 
 def _safe_unlink(path: Path) -> None:
@@ -242,6 +270,7 @@ def main() -> int:
     )
     uploader = make_uploader(cfg)
     manifest: ManifestManager | None = None
+    rt_manifest: RealtimeManifest | None = None
     if uploader is not None:
         logger.info("r2_uploader_enabled bucket=%s prefix=%s", cfg.r2_bucket, cfg.r2_key_prefix)
         manifest = ManifestManager(
@@ -249,6 +278,19 @@ def main() -> int:
             key_prefix=cfg.r2_key_prefix,
             public_base_url=cfg.r2_public_base_url,
         )
+        if cfg.realtime_enabled:
+            logger.info(
+                "realtime_enabled prefix=%s window_minutes=%d max_image_dim=%d",
+                cfg.realtime_key_prefix,
+                cfg.realtime_window_minutes,
+                cfg.realtime_max_image_dim,
+            )
+            rt_manifest = RealtimeManifest(
+                uploader,
+                key_prefix=cfg.realtime_key_prefix,
+                public_base_url=cfg.r2_public_base_url,
+                window_minutes=cfg.realtime_window_minutes,
+            )
 
     handler_lock = threading.Lock()
 
@@ -317,9 +359,13 @@ def main() -> int:
                             cfg.motion_threshold,
                             "above_threshold" if moved else "below_threshold_skip_detector",
                         )
+                    detected = False
+                    status = "motion_skipped"
                     if run_detector:
                         prepared = detector.prepare_image(frame)
-                        if detector.is_bird_present(prepared):
+                        detected = detector.is_bird_present(prepared)
+                        status = "bird" if detected else "no_bird"
+                        if detected:
                             status_led.bird_detected()
                             with handler_lock:
                                 _handle_event(
@@ -328,6 +374,10 @@ def main() -> int:
                                 )
                         else:
                             logger.info("detector_result=no_bird")
+                    if rt_manifest is not None and uploader is not None:
+                        _upload_realtime(
+                            cfg, uploader, rt_manifest, frame, detected, status,
+                        )
                     iteration_ok = True
                 except _SkipIteration:
                     iteration_ok = True
