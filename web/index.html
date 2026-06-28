@@ -93,6 +93,22 @@ body{min-height:100vh}
 }
 .badge-auto{background:rgba(59,130,246,.15);color:var(--accent)}
 .badge-manual{background:rgba(245,158,11,.15);color:var(--orange)}
+.badge-detected{background:rgba(34,197,94,.18);color:var(--green)}
+.badge-clear{background:rgba(255,255,255,.06);color:var(--text-muted)}
+.badge-skipped{background:rgba(245,158,11,.12);color:var(--text-muted)}
+
+/* ── tabs ── */
+.tabs{
+  display:flex;gap:.25rem;padding:0 1.5rem;
+  background:var(--surface);border-bottom:1px solid var(--border);
+}
+.tab{
+  padding:.65rem .9rem;background:none;border:none;
+  border-bottom:2px solid transparent;color:var(--text-muted);
+  cursor:pointer;font-size:.85rem;font-weight:600;
+}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--text);border-bottom-color:var(--accent)}
 .video-link{
   color:var(--accent);text-decoration:none;display:inline-flex;align-items:center;gap:.25rem;
 }
@@ -152,6 +168,7 @@ body{min-height:100vh}
   .grid{grid-template-columns:1fr;padding:.75rem}
   .toolbar{padding:.75rem 1rem}
   .status-bar{padding:.75rem 1rem}
+  .tabs{padding:0 1rem}
 }
 </style>
 </head>
@@ -186,6 +203,12 @@ body{min-height:100vh}
   </div>
 </header>
 
+<!-- Tabs -->
+<nav class="tabs" id="tabs">
+  <button class="tab active" data-tab="events">Detections</button>
+  <button class="tab" data-tab="realtime">Live &middot; last 30 min</button>
+</nav>
+
 <!-- Status bar -->
 <div class="status-bar" id="status-bar">
   <span class="status-chip"><span class="dot dot-muted"></span> Connecting&hellip;</span>
@@ -199,6 +222,9 @@ body{min-height:100vh}
     <option value="auto">Auto only</option>
     <option value="manual">Manual only</option>
   </select>
+  <span id="realtime-info" style="display:none;font-size:.8rem;color:var(--text-muted)">
+    Last 30 min &middot; auto-refreshing
+  </span>
   <span class="spacer"></span>
   <span id="event-count"></span>
 </div>
@@ -223,6 +249,13 @@ body{min-height:100vh}
       The full public URL to the <code>manifest.json</code> file in your R2 bucket.
       The bird-away service generates this automatically when R2 publishing is enabled.
     </p>
+    <label for="input-realtime-url">Real-time manifest URL (optional)</label>
+    <input type="text" id="input-realtime-url"
+           placeholder="auto (derived from manifest URL)">
+    <p style="font-size:.75rem;color:var(--text-muted);margin:-0.6rem 0 1rem">
+      Powers the <strong>Live</strong> tab. Leave blank to derive it from the
+      manifest URL above (swaps <code>/events/</code> for <code>/realtime/</code>).
+    </p>
     <label for="input-refresh">Auto-refresh interval (seconds)</label>
     <input type="text" id="input-refresh" placeholder="60">
     <div class="modal-actions">
@@ -240,11 +273,18 @@ body{min-height:100vh}
 const STORAGE_KEY = "bird-away-dashboard";
 let state = {
   manifestUrl: "",
+  realtimeManifestUrl: "",      // explicit override; blank = derive from manifestUrl
   refreshInterval: 60,
+  activeTab: "events",          // "events" | "realtime"
   events: [],
+  realtimeFrames: [],
+  realtimeWindowMinutes: 30,
   lastUpdated: null,
+  realtimeLastUpdated: null,
   loading: false,
+  realtimeLoading: false,
   error: null,
+  realtimeError: null,
 };
 let refreshTimer = null;
 
@@ -254,7 +294,9 @@ function loadSettings() {
     if (raw) {
       const s = JSON.parse(raw);
       if (s.manifestUrl) state.manifestUrl = s.manifestUrl;
+      if (s.realtimeManifestUrl) state.realtimeManifestUrl = s.realtimeManifestUrl;
       if (s.refreshInterval) state.refreshInterval = Math.max(10, s.refreshInterval);
+      if (s.activeTab === "realtime" || s.activeTab === "events") state.activeTab = s.activeTab;
     }
   } catch {}
   // Query param override
@@ -266,8 +308,18 @@ function loadSettings() {
 function saveSettings() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify({
     manifestUrl: state.manifestUrl,
+    realtimeManifestUrl: state.realtimeManifestUrl,
     refreshInterval: state.refreshInterval,
+    activeTab: state.activeTab,
   }));
+}
+
+// Resolve the real-time manifest URL: explicit override wins, else derive from
+// the events manifest URL by swapping its prefix segment for "realtime".
+function realtimeUrl() {
+  if (state.realtimeManifestUrl) return state.realtimeManifestUrl;
+  if (!state.manifestUrl) return "";
+  return state.manifestUrl.replace(/\/[^/]+\/manifest\.json(\?.*)?$/, "/realtime/manifest.json$1");
 }
 
 /* ── Data fetching ── */
@@ -294,35 +346,94 @@ async function fetchManifest() {
   render();
 }
 
+async function fetchRealtimeManifest() {
+  const url = realtimeUrl();
+  if (!url) {
+    state.realtimeError = "no_url";
+    state.realtimeFrames = [];
+    render();
+    return;
+  }
+  state.realtimeLoading = true;
+  state.realtimeError = null;
+  render();
+  try {
+    const resp = await fetch(url, { cache: "no-store" });
+    if (!resp.ok) throw new Error("HTTP " + resp.status);
+    const data = await resp.json();
+    state.realtimeFrames = data.frames || [];
+    state.realtimeLastUpdated = data.last_updated || null;
+    if (data.window_minutes) state.realtimeWindowMinutes = data.window_minutes;
+    state.realtimeError = null;
+  } catch (e) {
+    state.realtimeError = e.message || "fetch_failed";
+  }
+  state.realtimeLoading = false;
+  render();
+}
+
+// Fetch whichever manifest(s) the active tab needs.
+function refreshActive() {
+  if (state.activeTab === "realtime") fetchRealtimeManifest();
+  else fetchManifest();
+}
+
 function scheduleRefresh() {
   clearInterval(refreshTimer);
   if (state.manifestUrl && state.refreshInterval > 0) {
-    refreshTimer = setInterval(fetchManifest, state.refreshInterval * 1000);
+    refreshTimer = setInterval(refreshActive, state.refreshInterval * 1000);
   }
 }
 
 /* ── Rendering ── */
 function render() {
+  renderTabs();
+  renderToolbar();
   renderStatus();
-  renderGrid();
+  if (state.activeTab === "realtime") renderRealtimeGrid();
+  else renderGrid();
+}
+
+function renderTabs() {
+  document.querySelectorAll("#tabs .tab").forEach(function(btn) {
+    btn.classList.toggle("active", btn.dataset.tab === state.activeTab);
+  });
+}
+
+// Date/trigger filters belong to the Detections tab only; the Live tab shows a
+// "last 30 min" note instead.
+function renderToolbar() {
+  const isRealtime = state.activeTab === "realtime";
+  document.getElementById("filter-date").style.display = isRealtime ? "none" : "";
+  document.getElementById("filter-trigger").style.display = isRealtime ? "none" : "";
+  document.getElementById("realtime-info").style.display = isRealtime ? "" : "none";
 }
 
 function renderStatus() {
   const bar = document.getElementById("status-bar");
+  const isRealtime = state.activeTab === "realtime";
+  const loading = isRealtime ? state.realtimeLoading : state.loading;
+  const error = isRealtime ? state.realtimeError : state.error;
+  const lastUpdated = isRealtime ? state.realtimeLastUpdated : state.lastUpdated;
   const chips = [];
-  if (state.loading) {
+  if (loading) {
     chips.push('<span class="status-chip"><span class="dot dot-orange"></span> Loading&hellip;</span>');
-  } else if (state.error === "no_url") {
+  } else if (error === "no_url") {
     chips.push('<span class="status-chip"><span class="dot dot-red"></span> No manifest URL configured &mdash; click Settings</span>');
-  } else if (state.error) {
-    chips.push('<span class="status-chip"><span class="dot dot-red"></span> Error: ' + esc(state.error) + '</span>');
+  } else if (error) {
+    chips.push('<span class="status-chip"><span class="dot dot-red"></span> Error: ' + esc(error) + '</span>');
   } else {
     chips.push('<span class="status-chip"><span class="dot dot-green"></span> Connected</span>');
   }
-  if (state.lastUpdated) {
-    chips.push('<span class="status-chip">Last event: ' + formatTimestamp(state.lastUpdated) + '</span>');
+  if (lastUpdated) {
+    const label = isRealtime ? "Last frame: " : "Last event: ";
+    chips.push('<span class="status-chip">' + label + formatTimestamp(lastUpdated) + '</span>');
   }
-  chips.push('<span class="status-chip">Events: ' + state.events.length + '</span>');
+  if (isRealtime) {
+    chips.push('<span class="status-chip">Frames: ' + getRealtimeFrames().length + '</span>');
+  } else {
+    chips.push('<span class="status-chip">Events: ' + state.events.length + '</span>');
+  }
   if (state.refreshInterval > 0 && state.manifestUrl) {
     chips.push('<span class="status-chip">Auto-refresh: ' + state.refreshInterval + 's</span>');
   }
@@ -391,6 +502,62 @@ function renderGrid() {
   }).join("");
 }
 
+// Frames within the rolling window, newest first. Guards against a manifest
+// that briefly holds slightly-older entries than the configured window.
+function getRealtimeFrames() {
+  const windowMs = (state.realtimeWindowMinutes || 30) * 60 * 1000;
+  const cutoff = Date.now() - windowMs;
+  return state.realtimeFrames.filter(function(f) {
+    const dt = parseTs(f.ts);
+    return dt && dt.getTime() >= cutoff;
+  });
+}
+
+function renderRealtimeGrid() {
+  const grid = document.getElementById("grid");
+  const frames = getRealtimeFrames();
+  document.getElementById("event-count").textContent = frames.length + " frames";
+
+  if (!realtimeUrl() && !state.realtimeLoading) {
+    grid.innerHTML = emptyState(
+      "Live view not configured",
+      "Set a manifest URL in Settings (the real-time URL is derived from it), " +
+      "and enable realtime_enabled on the device."
+    );
+    return;
+  }
+  if (state.realtimeLoading && state.realtimeFrames.length === 0) {
+    grid.innerHTML = '<div class="loader">Loading frames&hellip;</div>';
+    return;
+  }
+  if (frames.length === 0) {
+    grid.innerHTML = emptyState(
+      "No recent frames",
+      "Nothing captured in the last " + (state.realtimeWindowMinutes || 30) +
+      " minutes. Frames appear here each time the device checks the camera " +
+      "(only during daytime hours)."
+    );
+    return;
+  }
+
+  grid.innerHTML = frames.map(function(f) {
+    const dt = parseTs(f.ts);
+    const badge = f.detected
+      ? '<span class="badge badge-detected">Bird</span>'
+      : (f.status === "motion_skipped"
+          ? '<span class="badge badge-skipped">Not checked</span>'
+          : '<span class="badge badge-clear">No bird</span>');
+    return '<div class="card" data-rt-ts="' + esc(f.ts) + '">' +
+      '<img class="card-img" src="' + esc(f.image_url) + '" alt="Frame ' + esc(f.ts) + '" loading="lazy" onerror="this.style.display=\'none\'">' +
+      '<div class="card-body">' +
+        '<div class="card-date">' + esc(f.date) + '</div>' +
+        '<div class="card-time">' + (dt ? formatTime(dt) : esc(f.ts)) + '</div>' +
+        '<div class="card-meta">' + badge + '</div>' +
+      '</div>' +
+    '</div>';
+  }).join("");
+}
+
 function emptyState(title, desc) {
   return '<div class="empty" style="grid-column:1/-1">' +
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">' +
@@ -409,17 +576,31 @@ function openLightbox(ev) {
   const dt = parseTs(ev.ts);
   const timeStr = dt ? formatTime(dt) + " &mdash; " + ev.date : ev.ts;
 
-  content.innerHTML =
-    '<img src="' + esc(ev.image_url) + '" alt="Detection">' +
-    '<div class="overlay-info">' +
-      '<span style="font-weight:600">' + timeStr + '</span>' +
-      '<span class="badge badge-' + esc(ev.trigger || "auto") + '">' + esc(ev.trigger || "auto") + '</span>' +
-      '<span class="spacer"></span>' +
-      '<a class="btn" href="' + esc(ev.image_url) + '" target="_blank" rel="noopener">Open image</a>' +
-      '<a class="btn btn-primary" href="' + esc(ev.video_url) + '" target="_blank" rel="noopener">' +
+  // Events carry a trigger badge + video; real-time frames carry a detection badge.
+  let badge;
+  if (ev.video_url) {
+    badge = '<span class="badge badge-' + esc(ev.trigger || "auto") + '">' + esc(ev.trigger || "auto") + '</span>';
+  } else if (ev.detected) {
+    badge = '<span class="badge badge-detected">Bird</span>';
+  } else if (ev.status === "motion_skipped") {
+    badge = '<span class="badge badge-skipped">Not checked</span>';
+  } else {
+    badge = '<span class="badge badge-clear">No bird</span>';
+  }
+  const videoBtn = ev.video_url
+    ? '<a class="btn btn-primary" href="' + esc(ev.video_url) + '" target="_blank" rel="noopener">' +
         '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>' +
         'Play video' +
-      '</a>' +
+      '</a>'
+    : '';
+  content.innerHTML =
+    '<img src="' + esc(ev.image_url) + '" alt="Capture">' +
+    '<div class="overlay-info">' +
+      '<span style="font-weight:600">' + timeStr + '</span>' +
+      badge +
+      '<span class="spacer"></span>' +
+      '<a class="btn" href="' + esc(ev.image_url) + '" target="_blank" rel="noopener">Open image</a>' +
+      videoBtn +
     '</div>';
   box.classList.add("active");
 }
@@ -463,10 +644,22 @@ function formatTimestamp(iso) {
 }
 
 /* ── Event handlers ── */
-document.getElementById("refresh-btn").addEventListener("click", fetchManifest);
+document.getElementById("refresh-btn").addEventListener("click", refreshActive);
+
+document.getElementById("tabs").addEventListener("click", function(e) {
+  const btn = e.target.closest(".tab");
+  if (!btn) return;
+  const tab = btn.dataset.tab;
+  if (tab === state.activeTab) return;
+  state.activeTab = tab;
+  saveSettings();
+  render();
+  refreshActive();
+});
 
 document.getElementById("settings-btn").addEventListener("click", function() {
   document.getElementById("input-manifest-url").value = state.manifestUrl;
+  document.getElementById("input-realtime-url").value = state.realtimeManifestUrl;
   document.getElementById("input-refresh").value = state.refreshInterval;
   document.getElementById("settings-modal").classList.add("active");
 });
@@ -477,17 +670,24 @@ document.getElementById("settings-cancel").addEventListener("click", function() 
 
 document.getElementById("settings-save").addEventListener("click", function() {
   state.manifestUrl = document.getElementById("input-manifest-url").value.trim();
+  state.realtimeManifestUrl = document.getElementById("input-realtime-url").value.trim();
   const iv = parseInt(document.getElementById("input-refresh").value, 10);
   state.refreshInterval = isNaN(iv) || iv < 10 ? 60 : iv;
   saveSettings();
   document.getElementById("settings-modal").classList.remove("active");
-  fetchManifest();
+  refreshActive();
   scheduleRefresh();
 });
 
 document.getElementById("grid").addEventListener("click", function(e) {
   const card = e.target.closest(".card");
   if (!card) return;
+  if (state.activeTab === "realtime") {
+    const ts = card.dataset.rtTs;
+    const f = state.realtimeFrames.find(function(x) { return x.ts === ts; });
+    if (f) openLightbox(f);
+    return;
+  }
   const ts = card.dataset.ts;
   const ev = state.events.find(function(x) { return x.ts === ts; });
   if (ev) openLightbox(ev);
@@ -516,6 +716,9 @@ async function autoDetect() {
     if (resp.ok) {
       var config = await resp.json();
       if (config.manifest_url) state.manifestUrl = config.manifest_url;
+      if (config.realtime_manifest_url && !state.realtimeManifestUrl) {
+        state.realtimeManifestUrl = config.realtime_manifest_url;
+      }
     }
   } catch (_) {}
 }
@@ -524,7 +727,8 @@ async function autoDetect() {
 (async function init() {
   loadSettings();
   await autoDetect();
-  fetchManifest();
+  render();
+  refreshActive();
   scheduleRefresh();
 })();
 

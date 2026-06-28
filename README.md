@@ -212,6 +212,9 @@ or upload it to the same R2 bucket as your events.
   image or play the video.
 - **Auto-refresh**: polls the manifest at a configurable interval (default
   60 seconds).
+- **Live tab**: a rolling last-30-minutes view of every captured frame labeled
+  bird / no-bird, for spotting missed detections (see
+  [Real-time monitoring](#real-time-monitoring)).
 
 ### CORS
 
@@ -231,6 +234,44 @@ Cloudflare dashboard, go to your R2 bucket → Settings → CORS policy and add:
 
 R2.dev public subdomains include permissive CORS headers by default, so this
 is usually not needed unless you've customized the bucket's CORS settings.
+
+### Real-time monitoring
+
+If you suspect the detector is missing birds, the **Live** tab gives you a
+rolling view of *every* frame the loop captured in the last 30 minutes — each
+labeled **Bird** or **No bird** — so you can manually spot false negatives.
+These frames are full-resolution (the detector only ever sees a 512px copy, so
+small birds can hide there) and carry no video.
+
+Enable it on the device (`config.yaml`):
+
+```yaml
+realtime_enabled: true        # requires r2_enabled: true
+realtime_key_prefix: realtime # frames + manifest land under this prefix
+realtime_window_minutes: 30   # how much the Live tab shows
+realtime_max_image_dim: 0     # 0 = full-res; e.g. 1280 to shrink
+```
+
+Frames upload to `realtime/frames/<ts>.jpg` and are indexed in
+`realtime/manifest.json` — kept entirely separate from `events/`, which stays
+real-detections-only. The dashboard derives the real-time manifest URL from the
+main manifest URL automatically (swapping `/events/` for `/realtime/`); override
+it in Settings if you use a custom prefix.
+
+**Set up cleanup so old frames don't accumulate.** R2 lifecycle rules expire
+objects by whole days (1-day minimum), so a true 30-minute purge isn't possible
+server-side — the Live tab provides the 30-minute *view*, and a lifecycle rule
+deletes the underlying objects a day later. In the Cloudflare dashboard: R2 →
+your bucket → Settings → Object lifecycle rules → **Add rule**, set the prefix
+to `realtime/frames/` and "Delete objects" **1 day** after creation. Scoping the
+rule to `realtime/frames/` leaves `realtime/manifest.json` untouched (it's
+rewritten every cycle anyway). Storage stays well within R2's free tier — one
+day of frames is a few hundred MB at most, and R2 egress is free.
+
+When deploying the dashboard to Vercel you can optionally set a
+`REALTIME_MANIFEST_URL` environment variable (alongside `MANIFEST_URL`); the
+build bakes it into `dashboard-config.json`. It's optional — the derive
+fallback covers the default `events`/`realtime` prefixes.
 
 ## Run by hand
 
