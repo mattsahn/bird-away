@@ -553,3 +553,7 @@ A few rules of thumb:
        captures/                  →  unbounded; prune via cron / tmpfiles.d
        scripts/test_*.py          →  per-stage smoke tests (camera / detector / sprinkler)
 ```
+
+## License
+
+[MIT](LICENSE)
