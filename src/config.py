@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass
+from datetime import time as dtime
 from pathlib import Path
 
 import yaml
@@ -28,6 +29,8 @@ class Config:
     motion_downscale: int
     log_level: str
     daytime_only: bool
+    daytime_start: dtime
+    daytime_end: dtime
     r2_enabled: bool
     r2_account_id: str
     r2_bucket: str
@@ -68,6 +71,8 @@ DEFAULTS = {
     "motion_downscale": 320,
     "log_level": "INFO",
     "daytime_only": True,
+    "daytime_start": "07:00",
+    "daytime_end": "19:00",
     "r2_enabled": False,
     "r2_account_id": "",
     "r2_bucket": "",
@@ -86,6 +91,31 @@ DEFAULTS = {
     "realtime_window_minutes": 30,
     "realtime_max_image_dim": 0,
 }
+
+
+def _parse_time_of_day(value: object, key: str) -> dtime:
+    """Parse a "HH:MM" (or "HH:MM:SS") config value into a datetime.time.
+
+    Unquoted YAML like `07:00` is resolved by PyYAML as a sexagesimal integer
+    (420), so reject ints with a message pointing at the quotes rather than
+    silently mis-parsing the window.
+    """
+    if isinstance(value, dtime):
+        return value.replace(microsecond=0)
+    if isinstance(value, int):
+        raise RuntimeError(
+            f"{key} must be a quoted \"HH:MM\" string (got {value!r}). "
+            f"Unquoted times like 07:00 are read as numbers by YAML."
+        )
+    text = str(value).strip()
+    parts = text.split(":")
+    if len(parts) not in (2, 3) or not all(p.isdigit() for p in parts):
+        raise RuntimeError(f'{key} must be a "HH:MM" 24-hour time (got {value!r})')
+    hour, minute = int(parts[0]), int(parts[1])
+    second = int(parts[2]) if len(parts) == 3 else 0
+    if not (0 <= hour <= 23 and 0 <= minute <= 59 and 0 <= second <= 59):
+        raise RuntimeError(f'{key} must be a valid 24-hour time (got {value!r})')
+    return dtime(hour, minute, second)
 
 
 def load_config(yaml_path: Path | str = "config.yaml") -> Config:
@@ -111,6 +141,14 @@ def load_config(yaml_path: Path | str = "config.yaml") -> Config:
             "config.yaml contains 'video_duration' which is no longer used. "
             "Replace it with 'pre_spray_seconds' and 'post_spray_seconds'. "
             "See config.yaml.example for details."
+        )
+
+    daytime_start = _parse_time_of_day(merged["daytime_start"], "daytime_start")
+    daytime_end = _parse_time_of_day(merged["daytime_end"], "daytime_end")
+    if bool(merged["daytime_only"]) and daytime_start == daytime_end:
+        raise RuntimeError(
+            "daytime_start and daytime_end are identical, which would disable "
+            "detection entirely. Set daytime_only: false to run 24/7."
         )
 
     if bool(merged["r2_enabled"]):
@@ -153,6 +191,8 @@ def load_config(yaml_path: Path | str = "config.yaml") -> Config:
         motion_downscale=int(merged["motion_downscale"]),
         log_level=str(merged["log_level"]).upper(),
         daytime_only=bool(merged["daytime_only"]),
+        daytime_start=daytime_start,
+        daytime_end=daytime_end,
         r2_enabled=bool(merged["r2_enabled"]),
         r2_account_id=str(merged["r2_account_id"]),
         r2_bucket=str(merged["r2_bucket"]),

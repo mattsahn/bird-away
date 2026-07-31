@@ -58,10 +58,16 @@ motion_enabled: true
 motion_threshold: 5.0
 motion_downscale: 320
 
-# Only run detection between 07:00 and 19:00 local time. Default true to
-# avoid burning API tokens on dark frames at night. Set false for testing
-# or if your setup actually needs nighttime coverage (IR camera, etc).
+# Only run detection inside the [daytime_start, daytime_end) window in local
+# time. Default true to avoid burning API tokens on dark frames at night. Set
+# false to run 24/7 (testing, or an IR camera that sees in the dark).
+#
+# Times must be quoted "HH:MM" strings — unquoted 07:00 is read as a number by
+# YAML. A start later than the end wraps past midnight, e.g. "21:00"-"05:00"
+# covers the night.
 daytime_only: true
+daytime_start: "07:00"
+daytime_end: "19:00"
 
 # Cloudflare R2 publishing (optional). When enabled, each detection's
 # snapshot + event video are uploaded to a bucket so they're viewable
