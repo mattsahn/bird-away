@@ -85,9 +85,15 @@ The clone path above (`/home/pi/git/bird-away`) matches the paths baked into
 - `detector_prompt` — system prompt sent to the vision model. Use a YAML
   literal block (`|`) to write it across multiple lines. See
   [Tuning the prompt](#tuning-the-prompt) for what makes a good one.
-- `daytime_only` — when `true` (default), only run detection between 07:00 and
-  19:00 local time. Set `false` to run 24/7 (e.g. for testing or with an IR
-  camera).
+- `daytime_only` — when `true` (default), only run detection inside the
+  `daytime_start`–`daytime_end` window. Set `false` to run 24/7 (e.g. for
+  testing or with an IR camera).
+- `daytime_start` / `daytime_end` — the active window in local time, as quoted
+  `"HH:MM"` 24-hour strings (defaults `"07:00"` and `"19:00"`). The window is
+  half-open: `[start, end)`. A start later than the end wraps past midnight, so
+  `daytime_start: "21:00"` with `daytime_end: "05:00"` runs overnight only.
+  Quote the values — unquoted `07:00` is parsed as a number by YAML and
+  rejected with an error.
 - `motion_enabled`, `motion_threshold`, `motion_downscale` — local frame-diff
   gate; only call the vision API when consecutive frames differ enough.
   Threshold is on a 0-255 mean per-pixel scale; `5.0` is a reasonable start.
@@ -492,7 +498,7 @@ A few rules of thumb:
                                             • capture_frame() → latest JPEG
                                               │
                                               ▼
-                                  daytime_only gate (07:00-19:00 local)
+                                  daytime_only gate (configurable window)
                                               │
                                   outside ◄───┴───► inside
                                      │                │

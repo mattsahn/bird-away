@@ -9,6 +9,7 @@ import sys
 import threading
 import time
 from datetime import datetime, timezone
+from datetime import time as time_of_day
 from pathlib import Path
 
 import httpx
@@ -26,9 +27,6 @@ from .uploader import R2Uploader, make_uploader
 
 logger = logging.getLogger("bird_away")
 
-DAYTIME_START_HOUR = 7
-DAYTIME_END_HOUR = 19
-
 RETENTION_SWEEP_INTERVAL_S = 3600.0
 CAPTURE_GLOBS = ("detection-*.jpg", "event-*.mp4")
 
@@ -37,8 +35,11 @@ class _SkipIteration(Exception):
     pass
 
 
-def _in_daytime() -> bool:
-    return DAYTIME_START_HOUR <= datetime.now().hour < DAYTIME_END_HOUR
+def _in_active_window(start: time_of_day, end: time_of_day, now: time_of_day) -> bool:
+    """True if `now` falls in [start, end). A start later than end wraps midnight."""
+    if start <= end:
+        return start <= now < end
+    return now >= start or now < end
 
 
 def _setup_logging(level: str) -> None:
@@ -244,6 +245,14 @@ def main() -> int:
     _setup_logging(cfg.log_level)
     cfg.capture_dir.mkdir(parents=True, exist_ok=True)
     logger.info("starting", extra={"capture_dir": str(cfg.capture_dir)})
+    if cfg.daytime_only:
+        logger.info(
+            "detection_window=[%s,%s) local",
+            cfg.daytime_start.strftime("%H:%M"),
+            cfg.daytime_end.strftime("%H:%M"),
+        )
+    else:
+        logger.info("detection_window=24h (daytime_only disabled)")
     _sd_notify("READY=1")
     _prune_old_captures(cfg.capture_dir, cfg.retention_days)
     next_prune_at = time.monotonic() + RETENTION_SWEEP_INTERVAL_S
@@ -339,12 +348,15 @@ def main() -> int:
                     next_prune_at = time.monotonic() + RETENTION_SWEEP_INTERVAL_S
                 iteration_ok = False
                 try:
-                    if cfg.daytime_only and not _in_daytime():
+                    now_local = datetime.now().time()
+                    if cfg.daytime_only and not _in_active_window(
+                        cfg.daytime_start, cfg.daytime_end, now_local
+                    ):
                         logger.info(
-                            "skipping_outside_daytime hour=%d window=[%d,%d)",
-                            datetime.now().hour,
-                            DAYTIME_START_HOUR,
-                            DAYTIME_END_HOUR,
+                            "skipping_outside_active_window now=%s window=[%s,%s)",
+                            now_local.strftime("%H:%M"),
+                            cfg.daytime_start.strftime("%H:%M"),
+                            cfg.daytime_end.strftime("%H:%M"),
                         )
                         raise _SkipIteration
                     frame = cam.capture_frame()

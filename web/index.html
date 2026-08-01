@@ -535,7 +535,7 @@ function renderRealtimeGrid() {
       "No recent frames",
       "Nothing captured in the last " + (state.realtimeWindowMinutes || 30) +
       " minutes. Frames appear here each time the device checks the camera " +
-      "(only during daytime hours)."
+      "(only during its configured active hours)."
     );
     return;
   }
