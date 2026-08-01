@@ -33,9 +33,9 @@ class Detector:
         self,
         api_key: str,
         system_prompt: str,
-        model: str = "anthropic/claude-haiku-4.5",
+        model: str = "google/gemini-3-flash-preview",
         base_url: str = "https://openrouter.ai/api/v1",
-        max_image_dim: int = 512,
+        max_image_dim: int = 0,
         jpeg_quality: int = 80,
     ) -> None:
         self._client = OpenAI(api_key=api_key, base_url=base_url)

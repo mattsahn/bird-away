@@ -33,12 +33,25 @@ capture_dir: ./captures
 retention_days: 7
 
 # Any OpenRouter model with vision support works here. Examples:
-#   anthropic/claude-haiku-4.5    (default — fast + cheap)
-#   anthropic/claude-sonnet-4.5   (more accurate on edge cases)
-#   openai/gpt-4o-mini            (fallback)
-#   google/gemini-2.5-flash       (fallback)
-detector_model: anthropic/claude-haiku-4.5
+#   google/gemini-3-flash-preview        (default — best measured accuracy)
+#   google/gemini-3.1-flash-lite-preview (similar accuracy, slower)
+#   google/gemini-2.5-flash              (fallback)
+# Note: anthropic/claude-haiku-4.5 and google/gemma-4-31b-it were measured at
+# 0% recall on this camera's frames — they do not resolve small distant birds.
+detector_model: google/gemini-3-flash-preview
 detector_base_url: https://openrouter.ai/api/v1
+
+# Longest-edge pixel cap applied to the frame before it is sent to the vision
+# model. 0 disables downscaling and sends the frame at native resolution.
+#
+# Leave this at 0 unless upload bandwidth is a real constraint. Downscaling to
+# 512 was measured to hurt BOTH ways on this camera: recall for
+# gemini-3-flash-preview dropped 100% -> 67%, and gemini-2.5-flash went from 0
+# to 5 false positives across 12 bird-free frames (it reads the white deck
+# ornament as an animal once the detail is gone). It also saves nothing on
+# token cost for the Gemini 3 models, which bill a fixed image token budget
+# regardless of input size.
+detector_max_image_dim: 0
 
 # System prompt sent to the vision model. The model receives this plus a single
 # image and is expected to reply with exactly "yes" or "no". Keep instructions

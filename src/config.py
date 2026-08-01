@@ -24,6 +24,7 @@ class Config:
     detector_model: str
     detector_base_url: str
     detector_prompt: str
+    detector_max_image_dim: int
     motion_enabled: bool
     motion_threshold: float
     motion_downscale: int
@@ -58,7 +59,7 @@ DEFAULTS = {
     "gpio_pin": 17,
     "relay_active_high": True,
     "capture_dir": "./captures",
-    "detector_model": "anthropic/claude-haiku-4.5",
+    "detector_model": "google/gemini-3-flash-preview",
     "detector_base_url": "https://openrouter.ai/api/v1",
     "detector_prompt": (
         "You are a bird detector for a backyard pool. "
@@ -66,6 +67,7 @@ DEFAULTS = {
         "near the pool (including birds in flight directly above it). "
         "Respond with exactly 'no' otherwise. Output only the single word."
     ),
+    "detector_max_image_dim": 0,
     "motion_enabled": True,
     "motion_threshold": 5.0,
     "motion_downscale": 320,
@@ -186,6 +188,7 @@ def load_config(yaml_path: Path | str = "config.yaml") -> Config:
         detector_model=str(merged["detector_model"]),
         detector_base_url=str(merged["detector_base_url"]),
         detector_prompt=str(merged["detector_prompt"]),
+        detector_max_image_dim=int(merged["detector_max_image_dim"]),
         motion_enabled=bool(merged["motion_enabled"]),
         motion_threshold=float(merged["motion_threshold"]),
         motion_downscale=int(merged["motion_downscale"]),
