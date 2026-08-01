@@ -15,7 +15,7 @@ are fixed fixtures, so a model comparison is reproducible across runs.
 The timestamp matches the source frame's key under the R2 `realtime/frames/`
 prefix, so any frame here can be traced back to the event that produced it.
 
-Five older fixtures predate this convention and use
+Four older fixtures predate this convention and use
 `pool_{lg,sm}_{yes,no}[_N].jpg`, where `lg`/`sm` describe the apparent size of
 the bird in frame rather than the image dimensions.
 
