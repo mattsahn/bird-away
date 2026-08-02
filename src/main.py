@@ -272,6 +272,7 @@ def main() -> int:
         model=cfg.detector_model,
         base_url=cfg.detector_base_url,
         max_image_dim=cfg.detector_max_image_dim,
+        max_tokens=cfg.detector_max_tokens,
     )
     motion = (
         MotionDetector(threshold=cfg.motion_threshold, downscale=cfg.motion_downscale)
