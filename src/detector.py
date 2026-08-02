@@ -37,12 +37,14 @@ class Detector:
         base_url: str = "https://openrouter.ai/api/v1",
         max_image_dim: int = 0,
         jpeg_quality: int = 80,
+        max_tokens: int = 64,
     ) -> None:
         self._client = OpenAI(api_key=api_key, base_url=base_url)
         self._model = model
         self._system_prompt = system_prompt
         self._max_image_dim = max_image_dim
         self._jpeg_quality = jpeg_quality
+        self._max_tokens = max_tokens
 
     def prepare_image(self, image_bytes: bytes) -> bytes:
         """Return the JPEG bytes that would be sent to the model.
@@ -64,7 +66,7 @@ class Detector:
         try:
             resp = self._client.chat.completions.create(
                 model=self._model,
-                max_tokens=4,
+                max_tokens=self._max_tokens,
                 messages=[
                     {"role": "system", "content": self._system_prompt},
                     {
@@ -82,6 +84,23 @@ class Detector:
             logger.exception("detector_unexpected_error")
             return False
 
-        text = (resp.choices[0].message.content or "").strip().lower()
+        choice = resp.choices[0] if resp.choices else None
+        text = ((choice.message.content if choice else None) or "").strip().lower()
+        if not text:
+            # An empty completion silently reads as "no bird", which looks
+            # identical to a genuinely empty frame in the logs. It usually
+            # means max_tokens is too small for the model: reasoning models
+            # spend the budget before emitting any visible token. Say so
+            # loudly rather than failing closed in silence.
+            logger.warning(
+                "detector_empty_response model=%s max_tokens=%d finish_reason=%s "
+                "completion_tokens=%s — treating as no-bird; raise "
+                "detector_max_tokens if this repeats",
+                self._model,
+                self._max_tokens,
+                getattr(choice, "finish_reason", None),
+                getattr(resp.usage, "completion_tokens", None),
+            )
+            return False
         logger.debug("detector_answer", extra={"answer": text})
         return text.startswith("yes")

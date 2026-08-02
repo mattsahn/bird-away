@@ -53,6 +53,20 @@ detector_base_url: https://openrouter.ai/api/v1
 # regardless of input size.
 detector_max_image_dim: 0
 
+# Completion token budget for the yes/no call. The useful answer is one token,
+# but reasoning models spend tokens thinking before they emit anything visible,
+# and if the budget runs out first the API returns an EMPTY completion.
+#
+# An empty completion reads as "no bird" and looks identical to a quiet frame
+# in the logs, so a too-small value silently disables detection entirely. This
+# happened with google/gemini-3-flash-preview at the old hardcoded value of 4:
+# 18 of 18 test frames came back empty, with no usage recorded upstream.
+#
+# 64 is cheap insurance — you are still billed for the one token the answer
+# actually uses. Don't lower it below ~32 without checking the model still
+# replies. The service logs detector_empty_response if this is ever too small.
+detector_max_tokens: 64
+
 # System prompt sent to the vision model. The model receives this plus a single
 # image and is expected to reply with exactly "yes" or "no". Keep instructions
 # short and unambiguous — long prompts cost more per call and don't necessarily
