@@ -33,7 +33,7 @@ class Detector:
         self,
         api_key: str,
         system_prompt: str,
-        model: str = "google/gemini-3-flash-preview",
+        model: str = "google/gemini-3.1-flash-lite",
         base_url: str = "https://openrouter.ai/api/v1",
         max_image_dim: int = 0,
         jpeg_quality: int = 80,
