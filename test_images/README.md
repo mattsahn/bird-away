@@ -34,6 +34,15 @@ near the far coping or on the right-hand deck by the covered patio. One
 (`233115Z`) has a bird in the water, which is the easiest positive in the set.
 `233717Z` has the largest group, about four birds together.
 
+Two later negatives were added on 2026-08-22/23 from the same camera position.
+`pool_no_20260823T174509Z.jpg` is the interesting one: there **is** a bird in
+it, a duck out on the lake well beyond the pool fence. It is labeled `no`
+because the sprinkler should not fire at it, which makes it a test of the
+prompt's scope rather than of the model's eyesight. Every model called it a
+positive while `detector_prompt` said "in, on, or near the pool"; naming the
+exclusion fixed it across the board (see `BENCHMARKS.md`). Keep it: it is the
+only fixture that catches a prompt whose boundary is too loose.
+
 The seven `20260801` negatives are frames the deployed detector false-positived
 on in production. They are the reason the negative set is worth keeping: with
 only the five original negatives, `gemini-2.5-flash` measured 0% false-positive
@@ -49,17 +58,20 @@ that rules that out.
 
 Every model benchmarked so far calls `pool_lg_no.jpg` a positive, and the
 object on the far coping is bird-shaped at full zoom, so the `no` label is
-questionable. It is currently the single fixture that separates the top
-models from a perfect score. Both `pool_lg_*` frames are also off
-distribution from the rest of the set — a handheld phone photo and a
-screenshot of the camera app, not frames pulled from the RTSP stream.
+questionable. It accounts for every remaining error in the current benchmark
+result — the shipped model gets all 23 other fixtures right 10 times out of 10.
+It is left mislabeled rather than flipped, because relabeling a fixture to make
+a number go up is how a benchmark stops meaning anything. Both `pool_lg_*`
+frames are also off distribution from the rest of the set — a handheld phone
+photo and a screenshot of the camera app, not frames pulled from the RTSP
+stream.
 
 ## Caveats
 
-The six positives all come from a single 13-minute window with the same birds
+The positives all come from a single 13-minute window with the same birds
 and the same lighting, so recall measured against this set says "resolves these
 birds at this distance in this light", not "resolves birds generally". The
-negatives span two days and a wider range of light, so false-positive rate is
+negatives span several days and a wider range of light, so false-positive rate is
 the better-supported half. More positives from other times of day are the most
 useful thing to add.
 

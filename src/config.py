@@ -60,16 +60,18 @@ DEFAULTS = {
     "gpio_pin": 17,
     "relay_active_high": True,
     "capture_dir": "./captures",
-    "detector_model": "google/gemini-3.1-flash-lite",
+    "detector_model": "bytedance-seed/seed-2.0-mini",
     "detector_base_url": "https://openrouter.ai/api/v1",
     "detector_prompt": (
         "You are a bird detector for a backyard pool. "
-        "Respond with exactly 'yes' if you see one or more birds in, on, or "
-        "near the pool (including birds in flight directly above it). "
+        "Respond with exactly 'yes' if you see one or more birds on the pool "
+        "deck, in the pool water, or in flight directly above it. Birds beyond "
+        "the fence — on the lake, on the far bank, on neighbouring roofs — do "
+        "not count, and neither do towels, cushions, planters or pool toys. "
         "Respond with exactly 'no' otherwise. Output only the single word."
     ),
     "detector_max_image_dim": 0,
-    "detector_max_tokens": 64,
+    "detector_max_tokens": 512,
     "motion_enabled": True,
     "motion_threshold": 5.0,
     "motion_downscale": 320,

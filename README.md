@@ -79,11 +79,21 @@ The clone path above (`/home/pi/git/bird-away`) matches the paths baked into
 - `relay_active_high` — `true` if the relay closes on logic-high, `false` if
   active-low (most cheap relay modules are active-low — check yours).
 - `capture_dir` — where images and clips are saved (default `./captures`).
-- `detector_model` — OpenRouter model id; default `google/gemini-3.1-flash-lite`.
+- `detector_model` — OpenRouter model id; default `bytedance-seed/seed-2.0-mini`.
   See [BENCHMARKS.md](BENCHMARKS.md) for the accuracy/cost comparison behind that
-  choice and `scripts/benchmark_models.py` to re-run it.
+  choice, `scripts/benchmark_models.py` to re-run it, and
+  `scripts/probe_model_costs.py` to find which models are in budget in the first
+  place. Note that the default reasons before answering, so it needs
+  `detector_max_tokens` at 512 or above — see below.
 - `detector_base_url` — OpenAI-compatible base URL; default
   `https://openrouter.ai/api/v1`. Override to point at a different provider.
+- `detector_max_tokens` — completion budget for the yes/no call (default
+  `512`). The answer is one token, but a reasoning model spends tokens
+  thinking first and returns an *empty* completion if the budget runs out —
+  which reads as "no bird" and quietly disables detection. The service logs
+  `detector_empty_response` and retries once when that happens; if you see it
+  repeatedly, raise this. You are only billed for tokens actually used, so a
+  generous value is close to free.
 - `detector_prompt` — system prompt sent to the vision model. Use a YAML
   literal block (`|`) to write it across multiple lines. See
   [Tuning the prompt](#tuning-the-prompt) for what makes a good one.
@@ -342,11 +352,33 @@ reading one model's reasoning on one frame.
 
 Useful flags: `--models a,b,c` to override the candidate list in
 `scripts/benchmark_config.yaml`, `--max-dim` to mirror
-`detector_max_image_dim`, `--repeats` to average out flaky models, and
+`detector_max_image_dim`, `--repeats` to average out flaky models,
+`--prompt-file` to score a reworded prompt against the same frames, and
 `--interval-seconds` / `--active-hours` to match the monthly estimate to
 your duty cycle. `--out` writes per-call `calls.csv` and `summary.json` for
 rescoring afterwards. Current results and what they do and do not support
 are in [BENCHMARKS.md](BENCHMARKS.md).
+
+### Finding out what a model actually costs
+
+A model's per-token price does not tell you what a frame costs, because
+models tokenize the same image very differently. The same 2304x1296 pool
+frame billed as 317 input tokens on `google/gemini-3.1-flash-image-preview`
+and 36,901 on `openai/gpt-4o-mini` — a 116x spread that reorders the price
+list entirely, and in both directions: the former came in 14x cheaper than
+its sticker price suggested, the latter 19x more expensive.
+
+So shortlist on measured cost, not published cost:
+
+```bash
+.venv/bin/python scripts/probe_model_costs.py --budget 0.00029 --out results/
+```
+
+That sends one real frame to every image-capable model in the OpenRouter
+catalog, prints them sorted by the amount actually billed, and lists the ones
+inside `--budget` in a form you can paste straight into `--models`. Models
+whose worst-case price would exceed `--max-estimate` (default `$0.02`/call)
+are skipped unprobed, so probing the whole catalog stays cheap.
 
 ## Run as a service
 
@@ -458,12 +490,19 @@ A few rules of thumb:
 
 - **Be specific about what counts.** "A bird" is ambiguous — does a duck on
   the deck count? Birds in flight? Reflections in the water? Most false
-  positives and false negatives come from leaving these unstated. The default
-  prompt explicitly covers "in, on, or near the pool (including birds in
-  flight directly above it)" for that reason.
-- **Keep it short.** Long prompts cost more per call and rarely improve
-  accuracy. If you find yourself writing a paragraph, switch to a stronger
-  `detector_model` instead.
+  positives and false negatives come from leaving these unstated.
+- **Be specific about what does *not* count.** This is where the measurable
+  wins are. The prompt used to stop at "in, on, or near the pool", and every
+  model tested fired on a frame whose only bird was a duck out on the lake,
+  behind the fence — defensible, given the wording. Naming the exclusions
+  (past the fence, and the towels and cushions that read as white birds at
+  30 pixels) took the best model from 8 false positives to 0 on the same
+  frames, for about 45 extra prompt tokens. Score wording changes the same way
+  you score models: `benchmark_models.py --prompt-file <file>`.
+- **Spend words on exclusions, not on emphasis.** Prompt tokens are cheap next
+  to the image — a frame is ~1,100 of the ~1,200 input tokens, so doubling the
+  prompt moves the bill by single-digit percent. Restating the task three ways
+  still buys nothing; naming a specific thing to ignore usually does.
 - **Pin the output format.** End with something like "Output only the single
   word." Models occasionally drift to "Yes." or "Yes, I see…" — those still
   match `startswith("yes")`, but rambling answers like "I'm not sure…" parse
@@ -471,7 +510,8 @@ A few rules of thumb:
 - **Iterate against saved frames.** Every detection writes a still to
   `captures/`. Point `scripts/test_detector.py captures/<file>.jpg` at known
   bird and non-bird frames to sanity-check a prompt change before restarting
-  the service.
+  the service, then add the interesting ones to `test_images/` so the next
+  benchmark run scores them.
 - **Restart after editing.** `config.yaml` is read once at startup —
   `sudo systemctl restart bird-away` to pick up changes.
 

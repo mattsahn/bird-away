@@ -33,13 +33,20 @@ capture_dir: ./captures
 retention_days: 7
 
 # Any OpenRouter model with vision support works here. Examples:
-#   google/gemini-3.1-flash-lite  (default — best measured accuracy per dollar)
-#   google/gemini-3-flash-preview (same recall, 2x the cost)
-#   google/gemini-2.5-flash-lite  (cheapest usable: 3x less, ~20 points recall)
-# Note: anthropic/claude-haiku-4.5, amazon/nova-lite-v1 and google/gemma-3-27b-it
-# were measured at 25-38% recall on this camera's frames — they do not resolve
-# small distant birds. See BENCHMARKS.md for the full comparison.
-detector_model: google/gemini-3.1-flash-lite
+#   bytedance-seed/seed-2.0-mini  (default — 100% recall, 0 false positives,
+#                                 ~$3.50/month; needs detector_max_tokens >= 512,
+#                                 see the note on that setting below)
+#   google/gemini-3.1-flash-lite  (2x the cost, never returns a blank answer)
+#   google/gemini-3.5-flash-lite  (lowest false-positive rate, 2x the cost)
+#   google/gemini-2.5-flash-lite  (cheapest Gemini: ~20 points less recall)
+# Note: anthropic/claude-haiku-4.5, amazon/nova-lite-v1, google/gemma-3-27b-it
+# and bytedance-seed/seed-1.6-flash were measured at 25-38% recall on this
+# camera's frames — they do not resolve small distant birds. Judge a candidate
+# on its measured cost per call, not its per-token price: the same frame bills
+# as 317 image tokens on one model and 36,901 on another, so the price list
+# ranks models wrongly. scripts/probe_model_costs.py measures it.
+# See BENCHMARKS.md for the full comparison.
+detector_model: bytedance-seed/seed-2.0-mini
 detector_base_url: https://openrouter.ai/api/v1
 
 # Longest-edge pixel cap applied to the frame before it is sent to the vision
@@ -63,20 +70,32 @@ detector_max_image_dim: 0
 # happened with google/gemini-3-flash-preview at the old hardcoded value of 4:
 # 18 of 18 test frames came back empty, with no usage recorded upstream.
 #
-# 64 is cheap insurance — you are still billed for the one token the answer
-# actually uses. Don't lower it below ~32 without checking the model still
-# replies. The service logs detector_empty_response if this is ever too small.
-detector_max_tokens: 64
+# The default model reasons before answering: at 64 tokens it came back blank
+# on 7 of 120 benchmark calls, 4 of them on frames that did contain a bird. At
+# 512 that drops to about 1 in 120, and it bills the same either way, because
+# the image dominates the token count. The service also retries once before it
+# gives up on a blank answer.
+#
+# 512 is cheap insurance — you are still billed only for the tokens the answer
+# actually uses. Don't lower it without checking the model still replies. The
+# service logs detector_empty_response whenever this is too small.
+detector_max_tokens: 512
 
 # System prompt sent to the vision model. The model receives this plus a single
 # image and is expected to reply with exactly "yes" or "no". Keep instructions
 # short and unambiguous — long prompts cost more per call and don't necessarily
 # improve accuracy. See the README "Tuning the prompt" section for guidance.
+# Naming what does NOT count is what earned the last few accuracy points. The
+# older wording ended at "in, on, or near the pool", and every model tested read
+# a duck out on the lake as a hit, because it is arguably near the pool. Excluding
+# everything past the fence took the best model from 8 false positives to 0.
 detector_prompt: |
-  You are a bird detector for a backyard pool. Respond with exactly 'yes'
-  if you see one or more birds in, on, or near the pool (including birds
-  in flight directly above it). Respond with exactly 'no' otherwise.
-  Output only the single word.
+  You are a bird detector for a backyard pool. Respond with exactly 'yes' if
+  you see one or more birds on the pool deck, in the pool water, or in flight
+  directly above it. Birds beyond the fence — on the lake, on the far bank, on
+  neighbouring roofs — do not count, and neither do towels, cushions, planters
+  or pool toys. Respond with exactly 'no' otherwise. Output only the single
+  word.
 
 # Local frame-diff gate. The vision API is only called when the mean per-pixel
 # delta between consecutive frames (downscaled grayscale) is >= threshold.

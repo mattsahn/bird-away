@@ -33,11 +33,11 @@ class Detector:
         self,
         api_key: str,
         system_prompt: str,
-        model: str = "google/gemini-3.1-flash-lite",
+        model: str = "bytedance-seed/seed-2.0-mini",
         base_url: str = "https://openrouter.ai/api/v1",
         max_image_dim: int = 0,
         jpeg_quality: int = 80,
-        max_tokens: int = 64,
+        max_tokens: int = 512,
     ) -> None:
         self._client = OpenAI(api_key=api_key, base_url=base_url)
         self._model = model
@@ -63,44 +63,54 @@ class Detector:
     def is_bird_present(self, image_bytes: bytes) -> bool:
         b64 = base64.standard_b64encode(image_bytes).decode("ascii")
         data_uri = f"data:image/jpeg;base64,{b64}"
-        try:
-            resp = self._client.chat.completions.create(
-                model=self._model,
-                max_tokens=self._max_tokens,
-                messages=[
-                    {"role": "system", "content": self._system_prompt},
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "image_url", "image_url": {"url": data_uri}},
-                        ],
-                    },
-                ],
-            )
-        except OpenAIError:
-            logger.exception("openai_api_error")
-            return False
-        except Exception:
-            logger.exception("detector_unexpected_error")
-            return False
+        # A model that answers with nothing at all is retried once: the answer
+        # is one token, so a blank reply is a quirk of the model rather than a
+        # verdict, and taking it as "no bird" misses birds silently. API
+        # failures still fail closed on the first try: a retry against a
+        # provider that is down only delays the next frame.
+        for attempt in range(2):
+            try:
+                text = self._ask(data_uri, attempt)
+            except OpenAIError:
+                logger.exception("openai_api_error")
+                return False
+            except Exception:
+                logger.exception("detector_unexpected_error")
+                return False
+            if text:
+                logger.debug("detector_answer", extra={"answer": text})
+                return text.startswith("yes")
+        return False
 
+    def _ask(self, data_uri: str, attempt: int) -> str | None:
+        """Return the model's lowercased answer, or None if it gave none."""
+        resp = self._client.chat.completions.create(
+            model=self._model,
+            max_tokens=self._max_tokens,
+            messages=[
+                {"role": "system", "content": self._system_prompt},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "image_url", "image_url": {"url": data_uri}},
+                    ],
+                },
+            ],
+        )
         choice = resp.choices[0] if resp.choices else None
         text = ((choice.message.content if choice else None) or "").strip().lower()
         if not text:
-            # An empty completion silently reads as "no bird", which looks
-            # identical to a genuinely empty frame in the logs. It usually
-            # means max_tokens is too small for the model: reasoning models
-            # spend the budget before emitting any visible token. Say so
-            # loudly rather than failing closed in silence.
+            # Usually max_tokens is too small for the model: reasoning models
+            # spend the whole budget before emitting a visible token.
             logger.warning(
                 "detector_empty_response model=%s max_tokens=%d finish_reason=%s "
-                "completion_tokens=%s — treating as no-bird; raise "
-                "detector_max_tokens if this repeats",
+                "completion_tokens=%s attempt=%d — raise detector_max_tokens if "
+                "this repeats",
                 self._model,
                 self._max_tokens,
                 getattr(choice, "finish_reason", None),
                 getattr(resp.usage, "completion_tokens", None),
+                attempt + 1,
             )
-            return False
-        logger.debug("detector_answer", extra={"answer": text})
-        return text.startswith("yes")
+            return None
+        return text

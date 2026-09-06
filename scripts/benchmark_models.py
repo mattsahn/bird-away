@@ -15,15 +15,18 @@ over the run and extrapolated to a monthly figure for the sampling rate
 in ``--interval-seconds`` / ``--active-hours``.
 
 Reasoning models spend the completion budget before emitting a visible
-token and score as all-empty at the daemon's 64-token default, so a model
-entry in the config may be a mapping carrying its own ``max_tokens`` and
-``reasoning_effort`` instead of a bare id.
+token, so too small a ``--max-tokens`` scores them as a uniform "no bird"
+that looks like blindness rather than a misconfiguration. The default
+matches ``detector_max_tokens``; a model entry in the config may also be a
+mapping carrying its own ``max_tokens`` and ``reasoning_effort`` instead of
+a bare id.
 
 Usage:
     python scripts/benchmark_models.py
     python scripts/benchmark_models.py --max-dim 1280 --repeats 3
     python scripts/benchmark_models.py --models google/gemini-2.5-flash-lite,openai/gpt-5-mini
     python scripts/benchmark_models.py --out results/run1
+    python scripts/benchmark_models.py --prompt-file prompts/ignore_lake.txt
 
 Models and prompt come from scripts/benchmark_config.yaml by default.
 The OPENROUTER_API_KEY env var is read from .env at the repo root.
@@ -337,9 +340,11 @@ def main() -> int:
     )
     parser.add_argument("--jpeg-quality", type=int, default=80)
     parser.add_argument(
-        "--max-tokens", type=int, default=64,
+        "--max-tokens", type=int, default=512,
         help="Completion budget for models without a config override, matching "
-             "detector_max_tokens (default 64)",
+             "detector_max_tokens (default 512). Lowering it can silently zero "
+             "out a reasoning model's recall: it spends the whole budget "
+             "thinking and returns an empty answer, which scores as 'no bird'",
     )
     parser.add_argument(
         "--reasoning-effort", default=None,
@@ -357,6 +362,11 @@ def main() -> int:
     parser.add_argument(
         "--active-hours", type=float, default=12.0,
         help="Active hours per day used for the monthly cost estimate",
+    )
+    parser.add_argument(
+        "--prompt-file", type=Path, default=None,
+        help="Read the classification prompt from this file instead of the config, "
+             "to score prompt wording changes against the same fixtures",
     )
     parser.add_argument("--out", type=Path, default=None, help="Directory for CSV/JSON output")
     args = parser.parse_args()
@@ -389,9 +399,16 @@ def main() -> int:
         )
     if not specs:
         sys.exit("no models to test")
-    prompt = (cfg.get("classification_prompt") or "").strip()
+    if args.prompt_file:
+        if not args.prompt_file.exists():
+            sys.exit(f"prompt file not found: {args.prompt_file}")
+        prompt = args.prompt_file.read_text().strip()
+    else:
+        prompt = (cfg.get("classification_prompt") or "").strip()
     if not prompt:
-        sys.exit(f"config {args.config} has no classification_prompt")
+        sys.exit(
+            f"no classification_prompt in {args.prompt_file or args.config}"
+        )
 
     images: list[tuple[Path, bool]] = []
     for path in sorted(args.images.iterdir()):

@@ -1,4 +1,4 @@
-"""Send a local image to Claude and print the yes/no answer.
+"""Send a local image to the configured vision model, print the yes/no answer.
 
 Usage: python scripts/test_detector.py path/to/image.jpg
 """
@@ -24,6 +24,8 @@ def main() -> int:
         system_prompt=cfg.detector_prompt,
         model=cfg.detector_model,
         base_url=cfg.detector_base_url,
+        max_image_dim=cfg.detector_max_image_dim,
+        max_tokens=cfg.detector_max_tokens,
     )
     result = detector.is_bird_present(image_path.read_bytes())
     print("yes" if result else "no")
