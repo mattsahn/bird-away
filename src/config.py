@@ -60,7 +60,7 @@ DEFAULTS = {
     "gpio_pin": 17,
     "relay_active_high": True,
     "capture_dir": "./captures",
-    "detector_model": "google/gemini-3-flash-preview",
+    "detector_model": "google/gemini-3.1-flash-lite",
     "detector_base_url": "https://openrouter.ai/api/v1",
     "detector_prompt": (
         "You are a bird detector for a backyard pool. "

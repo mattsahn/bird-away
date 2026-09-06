@@ -45,6 +45,15 @@ The rest of the negatives are daylight frames, so without it a model could score
 well by keying on "dim frame -> bird" rather than on birds. It is the control
 that rules that out.
 
+## The disputed fixture
+
+Every model benchmarked so far calls `pool_lg_no.jpg` a positive, and the
+object on the far coping is bird-shaped at full zoom, so the `no` label is
+questionable. It is currently the single fixture that separates the top
+models from a perfect score. Both `pool_lg_*` frames are also off
+distribution from the rest of the set — a handheld phone photo and a
+screenshot of the camera app, not frames pulled from the RTSP stream.
+
 ## Caveats
 
 The six positives all come from a single 13-minute window with the same birds
@@ -55,6 +64,13 @@ the better-supported half. More positives from other times of day are the most
 useful thing to add.
 
 ## Running a comparison
+
+Scoring every model against the whole set, which is what picks
+`detector_model` (results in `BENCHMARKS.md`):
+
+    .venv/bin/python scripts/benchmark_models.py --repeats 5
+
+Inspecting one model's answer on one frame:
 
     cp scripts/models_config.yaml.example scripts/models_config.yaml
     .venv/bin/python scripts/test_models.py test_images/pool_yes_20260731T233717Z.jpg

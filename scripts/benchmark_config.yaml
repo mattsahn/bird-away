@@ -1,0 +1,43 @@
+# Config for scripts/benchmark_models.py
+#
+# Candidate detector models, ordered roughly cheapest-first. The point of
+# the list is the price/accuracy tradeoff against the deployed default
+# (google/gemini-3-flash-preview, $0.50/Mtok input), so it is weighted
+# toward cheaper vision models. OpenRouter prices as of 2026-09, per
+# million input tokens.
+#
+# An entry may be a bare model id or a mapping with `max_tokens` and
+# `reasoning_effort` overrides. Reasoning models need both: at the
+# daemon's 64-token budget they spend every token thinking and return an
+# empty completion, which scores as a uniform "no bird".
+
+models:
+  - id: openai/gpt-5-nano                   # 0.05
+    max_tokens: 512
+    reasoning_effort: minimal
+  - amazon/nova-lite-v1                     # 0.06
+  - id: z-ai/glm-5.3-flash                  # 0.075
+    max_tokens: 512
+  - mistralai/mistral-small-3.2-24b-instruct  # 0.075
+  - google/gemma-3-27b-it                   # 0.08
+  - google/gemini-2.5-flash-lite            # 0.10
+  - qwen/qwen3-vl-32b-instruct              # 0.104
+  - meta-llama/llama-4-scout                # 0.10
+  - qwen/qwen3-vl-30b-a3b-instruct          # 0.15
+  - qwen/qwen3-vl-235b-a22b-instruct        # 0.21
+  - google/gemini-3.1-flash-lite            # 0.25
+  - id: openai/gpt-5-mini                   # 0.25
+    max_tokens: 512
+    reasoning_effort: minimal
+  - google/gemini-2.5-flash                 # 0.30
+  - openai/gpt-4.1-mini                     # 0.40
+  - google/gemini-3-flash-preview           # 0.50 - current default
+  - anthropic/claude-haiku-4.5              # 1.00 - previous default
+
+# Yes/no classification prompt. Keep in sync with detector_prompt in
+# config.yaml so the benchmark measures what production actually asks.
+classification_prompt: |
+  You are a bird detector for a backyard pool. Respond with exactly 'yes'
+  if you see one or more birds in, on, or near the pool (including birds
+  in flight directly above it). Respond with exactly 'no' otherwise.
+  Output only the single word.

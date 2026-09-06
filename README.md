@@ -79,7 +79,9 @@ The clone path above (`/home/pi/git/bird-away`) matches the paths baked into
 - `relay_active_high` — `true` if the relay closes on logic-high, `false` if
   active-low (most cheap relay modules are active-low — check yours).
 - `capture_dir` — where images and clips are saved (default `./captures`).
-- `detector_model` — OpenRouter model id; default `anthropic/claude-haiku-4.5`.
+- `detector_model` — OpenRouter model id; default `google/gemini-3.1-flash-lite`.
+  See [BENCHMARKS.md](BENCHMARKS.md) for the accuracy/cost comparison behind that
+  choice and `scripts/benchmark_models.py` to re-run it.
 - `detector_base_url` — OpenAI-compatible base URL; default
   `https://openrouter.ai/api/v1`. Override to point at a different provider.
 - `detector_prompt` — system prompt sent to the vision model. Use a YAML
@@ -324,6 +326,27 @@ animals, people, actions). Both prompts and the model list live in
 to use an alternate file. The script prints the raw response from each model
 along with the input resolution, elapsed time, and token usage so you can
 compare quality, cost, and latency at a glance.
+
+### Scoring a model, not just eyeballing it
+
+`scripts/benchmark_models.py` is the same idea at set scale: it runs the
+yes/no prompt over every labeled frame in `test_images/` for every candidate
+model and reports accuracy, recall, false-positive rate, latency, and the
+cost OpenRouter actually billed — plus a projected monthly spend at your
+sampling rate. That is what picks `detector_model`; `test_models.py` is for
+reading one model's reasoning on one frame.
+
+```bash
+.venv/bin/python scripts/benchmark_models.py --repeats 5 --out results/
+```
+
+Useful flags: `--models a,b,c` to override the candidate list in
+`scripts/benchmark_config.yaml`, `--max-dim` to mirror
+`detector_max_image_dim`, `--repeats` to average out flaky models, and
+`--interval-seconds` / `--active-hours` to match the monthly estimate to
+your duty cycle. `--out` writes per-call `calls.csv` and `summary.json` for
+rescoring afterwards. Current results and what they do and do not support
+are in [BENCHMARKS.md](BENCHMARKS.md).
 
 ## Run as a service
 
