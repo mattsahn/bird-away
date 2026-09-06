@@ -24,6 +24,7 @@ Usage:
     python scripts/benchmark_models.py --max-dim 1280 --repeats 3
     python scripts/benchmark_models.py --models google/gemini-2.5-flash-lite,openai/gpt-5-mini
     python scripts/benchmark_models.py --out results/run1
+    python scripts/benchmark_models.py --prompt-file prompts/ignore_lake.txt
 
 Models and prompt come from scripts/benchmark_config.yaml by default.
 The OPENROUTER_API_KEY env var is read from .env at the repo root.
@@ -358,6 +359,11 @@ def main() -> int:
         "--active-hours", type=float, default=12.0,
         help="Active hours per day used for the monthly cost estimate",
     )
+    parser.add_argument(
+        "--prompt-file", type=Path, default=None,
+        help="Read the classification prompt from this file instead of the config, "
+             "to score prompt wording changes against the same fixtures",
+    )
     parser.add_argument("--out", type=Path, default=None, help="Directory for CSV/JSON output")
     args = parser.parse_args()
 
@@ -389,9 +395,16 @@ def main() -> int:
         )
     if not specs:
         sys.exit("no models to test")
-    prompt = (cfg.get("classification_prompt") or "").strip()
+    if args.prompt_file:
+        if not args.prompt_file.exists():
+            sys.exit(f"prompt file not found: {args.prompt_file}")
+        prompt = args.prompt_file.read_text().strip()
+    else:
+        prompt = (cfg.get("classification_prompt") or "").strip()
     if not prompt:
-        sys.exit(f"config {args.config} has no classification_prompt")
+        sys.exit(
+            f"no classification_prompt in {args.prompt_file or args.config}"
+        )
 
     images: list[tuple[Path, bool]] = []
     for path in sorted(args.images.iterdir()):
