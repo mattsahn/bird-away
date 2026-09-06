@@ -12,9 +12,14 @@ prints the models sorted by measured cost per call. Feed the ones inside
 your budget to ``benchmark_models.py`` to find out whether they can see
 the birds.
 
-Catalog prices are still used as a guard: any model whose *worst case* cost
-would exceed ``--max-estimate`` is skipped unprobed, so probing the whole
-catalog cannot run up a large bill on frontier models.
+Catalog prices are still used as a coarse guard: any model whose estimated
+cost exceeds ``--max-estimate`` is skipped unprobed, which keeps the frontier
+models out of a whole-catalog run. It is an estimate, not a spending cap --
+how a model tokenizes an image is exactly the thing that cannot be known
+before probing it, and a model that bills the frame as 36,901 tokens will
+overrun an estimate built on 4,000 by roughly that ratio. The exposure is
+bounded by being one call per model: the worst run observed cost $0.12 total.
+The measured numbers this prints are what to trust.
 
 Usage:
     python scripts/probe_model_costs.py
@@ -50,10 +55,11 @@ MODELS_URL = "https://openrouter.ai/api/v1/models"
 DEFAULT_CONFIG = Path(__file__).resolve().parent / "benchmark_config.yaml"
 DEFAULT_IMAGE = REPO_ROOT / "test_images" / "pool_yes_20260731T233717Z.jpg"
 
-# Token counts for the pre-probe worst-case estimate. Deliberately high: the
-# guard exists to skip models that would be expensive, not to predict cost.
+# Token counts for the pre-probe estimate. A frame has measured anywhere from
+# 317 to 36,901 prompt tokens, so no single figure is a bound; this is a
+# middling guess, used only to keep frontier pricing out of a catalog sweep.
 EST_PROMPT_TOKENS = 4000
-EST_COMPLETION_TOKENS = 64
+EST_COMPLETION_TOKENS = 512  # the --max-tokens default
 
 
 @dataclass
@@ -75,14 +81,28 @@ def fetch_catalog() -> list[dict]:
 
 
 def _price(pricing: dict, key: str) -> float:
+    """Catalog price for one unit, or infinity when it is not knowable.
+
+    The router meta-models (``openrouter/auto``) advertise ``-1``, meaning
+    "whatever the model it picks charges". Reading that as a negative price
+    made them look free and got them probed at $0.006 a call, which is the
+    whole failure mode of trusting the catalog.
+    """
     try:
-        return float(pricing.get(key) or 0.0)
+        value = float(pricing.get(key) or 0.0)
     except (TypeError, ValueError):
-        return 0.0
+        return float("inf")
+    return float("inf") if value < 0 else value
 
 
 def estimate_cost(model: dict) -> float:
-    """Worst-case cost of one detector call from catalog prices."""
+    """Rough cost of one detector call from catalog prices.
+
+    Uses the dearest of the model's price overrides, but assumes
+    ``EST_PROMPT_TOKENS`` for the image, so the real call can cost several
+    times this. Order-of-magnitude filtering only. Infinity means the catalog
+    does not say, which skips the model rather than probing it blind.
+    """
     pricing = model.get("pricing") or {}
     overrides = pricing.get("overrides") or []
     prompt = max(
@@ -178,11 +198,17 @@ def main() -> int:
         help="Downscale longer edge first, like detector_max_image_dim (0 = native)",
     )
     parser.add_argument("--jpeg-quality", type=int, default=80)
-    parser.add_argument("--max-tokens", type=int, default=64)
+    parser.add_argument(
+        "--max-tokens", type=int, default=512,
+        help="Completion budget, matching detector_max_tokens (default 512). "
+             "Reasoning models answer with nothing below it",
+    )
     parser.add_argument(
         "--max-estimate", type=float, default=0.02,
-        help="Skip models whose worst-case estimated cost per call exceeds this "
-             "many dollars (default 0.02)",
+        help="Skip models whose estimated cost per call exceeds this many "
+             "dollars (default 0.02). A filter, not a spending cap: image "
+             "tokenization is unknown until measured, so an accepted probe can "
+             "bill several times the estimate",
     )
     parser.add_argument(
         "--budget", type=float, default=0.00029,
@@ -258,10 +284,11 @@ def main() -> int:
         )
     in_budget = [p for p in priced if (p.cost_usd or 0.0) <= args.budget]
     failed = [p for p in results if not p.ok]
+    spent = sum(p.cost_usd or 0.0 for p in priced)
     print(
         f"\n{len(in_budget)} models at or under ${args.budget:.6f}/call (marked *), "
         f"{len(failed)} unreachable, {len(results) - len(priced) - len(failed)} "
-        "returned no cost"
+        f"returned no cost. This run billed ${spent:.4f} in total."
     )
     print("in budget: " + ",".join(p.model for p in in_budget))
 
